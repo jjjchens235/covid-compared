@@ -1,6 +1,6 @@
 import configparser
 import psycopg2
-from sql_queries import copy_table_queries, insert_table_queries, count_queries
+from sql_queries import copy_table_queries, insert_table_queries #, count_queries, isnull_queries
 
 
 def load_staging_tables(cur, conn):
@@ -26,12 +26,22 @@ def count_tables(cur, conn):
     '''
     analytical queries to make sure row counts are valid
     '''
-    for query in count_queries:
-        print(query)
+    for table_name, query in count_queries.items():
+        #print(query)
         cur.execute(query)
         results = cur.fetchone()
-        for row in results:
-            print(row)
+        print(f'For table {table_name}, the count is {results[0]}')
+
+
+def isnull_tables(cur, conn):
+    '''
+    analytical queries to make sure no null values
+    '''
+    for table_name, query in isnull_queries.items():
+        #print(query)
+        cur.execute(query)
+        results = cur.fetchone()
+        print(f'For table {table_name}, the count of nulls is {results[0]}')
 
 
 def main():
@@ -46,7 +56,8 @@ def main():
 
     load_staging_tables(cur, conn)
     insert_tables(cur, conn)
-    # count_tables(cur, conn)
+    #count_tables(cur, conn)
+    #isnull_tables(cur, conn)
 
     conn.close()
 

@@ -18,14 +18,14 @@ def create_tables(cur, conn):
     create each table
     '''
     for query in create_table_queries:
-        #print(query)
+        print(query)
         cur.execute(query)
         conn.commit()
 
 
 def main():
     '''
-    drop any tables and create brand new ones
+    drop any existing tables and create brand new ones
     '''
     config = configparser.ConfigParser()
     config.read('dwh.cfg')

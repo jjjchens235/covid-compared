@@ -4,7 +4,8 @@ import configparser
 cfg = configparser.ConfigParser()
 cfg.read('dwh.cfg')
 
-staging_counties_confirmed_drop = "drop table if exists staging_counties_confirmed"
+# ---------------- DROP TABLES -------------
+staging_us_confirmed_drop = "drop table if exists staging_us_confirmed"
 staging_global_confirmed_drop = "drop table if exists staging_global_confirmed"
 
 staging_us_deaths_drop = "drop table if exists staging_us_deaths"
@@ -12,32 +13,31 @@ staging_global_deaths_drop = "drop table if exists staging_global_deaths"
 
 staging_global_recovered_drop = "drop table if exists staging_global_recovered"
 
-dim_countries_drop = "drop table if exists countries"
-dim_states_drop = "drop table if exists states"
-dim_counties_drop = "drop table if exists counties"
+dim_location_drop = "drop table if exists location"
 dim_time_drop = "drop table if exists time"
 
-counties_confirmed_temp_drop = "drop table if exists counties_confirmed_temp"
-global_confirmed_temp_drop = "drop table if exists global_confirmed_temp"
+confirmed_temp_drop = "drop table if exists confirmed_temp"
+deaths_temp_drop = "drop table if exists deaths_temp"
+recovered_temp_drop = "drop table if exists recovered_temp"
 
-counties_deaths_temp_drop = "drop table if exists counties_deaths_temp"
-global_deaths_temp_drop = "drop table if exists global_deaths_temp"
+fact_metrics_drop = "drop table if exists fact_metrics"
+#fact_global_drop = "drop table if exists fact_global"
 
-global_recovered_temp_drop = "drop table if exists global_recovered_temp"
+# ---------------- STAGING TABLES -------------
 
-
-staging_counties_confirmed_create = ("""CREATE TABLE if not exists staging_counties_confirmed(
+staging_us_confirmed_create = ("""CREATE TABLE IF NOT EXISTS staging_us_confirmed(
         country varchar,
         iso2 varchar,
         state varchar,
         county varchar,
+        population float,
         dt date,
         confirmed float
 )
 """)
 
-staging_counties_confirmed_copy = ("""
-        copy staging_counties_confirmed from {data_bucket}
+staging_us_confirmed_copy = ("""
+        copy staging_us_confirmed FROM {data_bucket}
         credentials 'aws_iam_role={role_arn}'
         region 'us-west-2'
         delimiter as '\\t'
@@ -47,16 +47,17 @@ staging_counties_confirmed_copy = ("""
     """).format(data_bucket=cfg.get('S3', 'US_CONFIRMED'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
 
 
-staging_global_confirmed_create = ("""CREATE TABLE if not exists staging_global_confirmed(
+staging_global_confirmed_create = ("""CREATE TABLE IF NOT EXISTS staging_global_confirmed(
         country varchar,
         state varchar,
+        population float,
         dt date,
         confirmed float
 )
 """)
 
 staging_global_confirmed_copy = ("""
-        copy staging_global_confirmed from {data_bucket}
+        copy staging_global_confirmed FROM {data_bucket}
         credentials 'aws_iam_role={role_arn}'
         region 'us-west-2'
         delimiter as '\\t'
@@ -66,7 +67,7 @@ staging_global_confirmed_copy = ("""
     """).format(data_bucket=cfg.get('S3', 'GLOBAL_CONFIRMED'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
 
 
-staging_us_deaths_create = ("""CREATE TABLE if not exists staging_us_deaths(
+staging_us_deaths_create = ("""CREATE TABLE IF NOT EXISTS staging_us_deaths(
         country varchar,
         iso2 varchar,
         state varchar,
@@ -77,7 +78,7 @@ staging_us_deaths_create = ("""CREATE TABLE if not exists staging_us_deaths(
 """)
 
 staging_us_deaths_copy = ("""
-        copy staging_us_deaths from {data_bucket}
+        copy staging_us_deaths FROM {data_bucket}
         credentials 'aws_iam_role={role_arn}'
         region 'us-west-2'
         delimiter as '\\t'
@@ -87,7 +88,7 @@ staging_us_deaths_copy = ("""
     """).format(data_bucket=cfg.get('S3', 'US_DEATH'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
 
 
-staging_global_deaths_create = ("""CREATE TABLE if not exists staging_global_deaths(
+staging_global_deaths_create = ("""CREATE TABLE IF NOT EXISTS staging_global_deaths(
         country varchar,
         state varchar,
         dt date,
@@ -96,7 +97,7 @@ staging_global_deaths_create = ("""CREATE TABLE if not exists staging_global_dea
 """)
 
 staging_global_deaths_copy = ("""
-        copy staging_global_deaths from {data_bucket}
+        copy staging_global_deaths FROM {data_bucket}
         credentials 'aws_iam_role={role_arn}'
         region 'us-west-2'
         delimiter as '\\t'
@@ -106,7 +107,7 @@ staging_global_deaths_copy = ("""
     """).format(data_bucket=cfg.get('S3', 'GLOBAL_DEATH'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
 
 
-staging_global_recovered_create = ("""CREATE TABLE if not exists staging_global_recovered(
+staging_global_recovered_create = ("""CREATE TABLE IF NOT EXISTS staging_global_recovered(
         country varchar,
         state varchar,
         dt date,
@@ -115,7 +116,7 @@ staging_global_recovered_create = ("""CREATE TABLE if not exists staging_global_
 """)
 
 staging_global_recovered_copy = ("""
-        copy staging_global_recovered from {data_bucket}
+        copy staging_global_recovered FROM {data_bucket}
         credentials 'aws_iam_role={role_arn}'
         region 'us-west-2'
         delimiter as '\\t'
@@ -124,76 +125,30 @@ staging_global_recovered_copy = ("""
         IGNOREHEADER 1;
     """).format(data_bucket=cfg.get('S3', 'GLOBAL_RECOVERED'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
 
+# ---------------- DiM TABLES -------------
 
-dim_countries_create = (""" CREATE TABLE if not exists countries(
-        country_id INTEGER Identity(0, 1) PRIMARY KEY,
-        country varchar
+dim_location_create = (""" CREATE TABLE IF NOT EXISTS location(
+        location_id INTEGER Identity(0, 1) PRIMARY KEY,
+        country varchar,
+        state varchar,
+        iso2 varchar,
+        county varchar,
+        population int
 )
 """)
 
-
-dim_countries_insert = ("""
-    INSERT INTO countries (country)
-    SELECT DISTINCT country
-    FROM staging_counties_confirmed
+dim_location_insert = ("""
+    INSERT INTO location (country, state, iso2, county, population)
+    SELECT DISTINCT country, state, iso2, county, CAST(population as INT) population
+    FROM staging_us_confirmed
 
     UNION
 
-    SELECT DISTINCT country
+    SELECT DISTINCT country, state, NULL as iso2, NULL as county, population
     FROM staging_global_confirmed
 """)
 
-
-dim_states_create = (""" CREATE TABLE if not exists states(
-        state_id INTEGER Identity(0, 1) PRIMARY KEY,
-        state varchar,
-        country_id int,
-        iso2 varchar
-)
-""")
-
-dim_states_insert = ("""
-    INSERT INTO states (state, country_id, iso2)
-    SELECT distinct state, country_id, iso2 from staging_counties_confirmed
-    join countries on staging_counties_confirmed.country = countries.country
-
-    UNION
-
-    SELECT distinct state, country_id, NULL as iso2 from staging_global_confirmed
-    join countries on staging_global_confirmed.country = countries.country
-    and staging_global_confirmed.state IS NOT NULL
-    """)
-
-
-dim_counties_create = (""" CREATE TABLE if not exists counties(
-        county_id INTEGER Identity(0, 1) PRIMARY KEY,
-        county varchar,
-        iso2 varchar,
-        state_id int
-)
-""")
-
-
-# don't think I need a country id since it's all USA
-dim_counties_insert = ("""
-    INSERT INTO counties (county, iso2, state_id)
-
-    SELECT distinct county, staging_counties_confirmed.iso2, state_id from staging_counties_confirmed
-
-    JOIN
-
-    -- can't join on state only b/c Princess state in both US & Canada
-    (select c.country, s.state, s.state_id from states s
-    join countries c
-    on s.country_id = c.country_id) as sc
-
-    on staging_counties_confirmed.state = sc.state
-    and staging_counties_confirmed.country = sc.country
-    and staging_counties_confirmed.county is NOT NULL
-    """)
-
-
-dim_time_create = (""" CREATE TABLE if not exists time(
+dim_time_create = (""" CREATE TABLE IF NOT EXISTS time(
         dt date PRIMARY KEY,
         year int,
         month int,
@@ -204,198 +159,123 @@ dim_time_create = (""" CREATE TABLE if not exists time(
 
 dim_time_insert = ("""
     INSERT INTO time (dt, year, month, day, weekday)
-    SELECT distinct dt, extract(year from dt) as year, extract(month from dt) as month, extract(day from dt) as day, extract(dow from dt) as weekday from staging_global_confirmed
+    SELECT distinct dt, extract(year FROM dt) as year, extract(month FROM dt) as month, extract(day FROM dt) as day, extract(dow FROM dt) as weekday FROM staging_global_confirmed
     """)
 
-# --------- temp tables - CONFIRMED ------
+# ---------------- TEMP FACT TABLES -------------
 # ----- get foreign keys for our intermediate fact tables
-counties_confirmed_temp_create = (""" CREATE TABLE if not exists counties_confirmed_temp(
-        county_id int,
-        state_id int,
+
+confirmed_temp_create = (""" CREATE TABLE IF NOT EXISTS confirmed_temp(
+        location_id int,
         dt date,
         confirmed int
 )
 """)
 
-counties_confirmed_temp_insert = ("""
-    INSERT INTO counties_confirmed_temp (county_id, state_id, dt, confirmed)
-    SELECT county_id, state_id, dt, CAST(confirmed as INT) confirmed
-    FROM staging_counties_confirmed JOIN
-    (select county_id, county, states.state_id, states.state from counties join states on counties.state_id = states.state_id) cs
-    on staging_counties_confirmed.county = cs.county
-    and staging_counties_confirmed.state = cs.state
-""")
-
-global_confirmed_temp_create = (""" CREATE TABLE if not exists global_confirmed_temp(
-        country_id int,
-        state_id int,
-        dt date,
-        confirmed int
-)
-""")
-
-global_confirmed_temp_insert = ("""
-    INSERT INTO global_confirmed_temp (country_id, state_id, dt, confirmed)
-
-    -- global data by country/state level, excluding US
-    SELECT country_id, state_id, dt, CAST(confirmed as INT) confirmed
+confirmed_temp_insert = ("""
+    INSERT INTO confirmed_temp (location_id, dt, confirmed)
+    (SELECT location_id, dt, CAST(confirmed as INT) confirmed
     FROM staging_global_confirmed
-    LEFT JOIN
-    (select c.country_id, s.state_id, c.country, s.state from states s
-     right join countries c
-     on s.country_id = c.country_id ) as sc
-    on staging_global_confirmed.country = sc.country
-    and (staging_global_confirmed.state = sc.state or (staging_global_confirmed.state iS NULL and sc.state IS NULL))
-    and staging_global_confirmed.country != 'US'
+    JOIN location
+    on staging_global_confirmed.country <> 'US'
+    and ((staging_global_confirmed.country || staging_global_confirmed.state = location.country || location.state) or (staging_global_confirmed.state IS NULL and location.state IS NULL and staging_global_confirmed.country =  location.country)))
 
     UNION
 
-    -- get US data by state level
-    SELECT sc.country_id, sc.state_id, dt, confirmed from
-
-        -- US confirmed, group counties by state
-        ((SELECT country, state, dt, CAST(sum(confirmed) as INT) confirmed
-        FROM staging_counties_confirmed
-        GROUP BY country, state, dt) as us
-
-        JOIN
-
-        /* Must match on state AND country to get correct state_id
-        Else you bring in Princess cruises twice (US & Can)
-        */
-
-        (select c.country_id, s.state_id, c.country, s.state from states s
-         join countries c
-         on s.country_id = c.country_id ) as sc
-
-        on us.state = sc.state and us.country = sc.country)
+    (SELECT location_id, dt, confirmed FROM
+    staging_us_confirmed
+    JOIN location
+    on (staging_us_confirmed.county || staging_us_confirmed.state = location.county || location.state) or (staging_us_confirmed.county IS NULL and staging_us_confirmed.country || staging_us_confirmed.state = location.country || location.state)
+    )
 """)
 
-# --------- temp tables - DEATHS ------
-# ----- get foreign keys for our intermediate fact tables
-counties_deaths_temp_create = (""" CREATE TABLE if not exists counties_deaths_temp(
-        county_id int,
-        state_id int,
+deaths_temp_create = (""" CREATE TABLE IF NOT EXISTS deaths_temp(
+        location_id int,
         dt date,
         deaths int
 )
 """)
 
-counties_deaths_temp_insert = ("""
-    INSERT INTO counties_deaths_temp (county_id, state_id, dt, deaths)
-    SELECT county_id, state_id, dt, CAST(deaths as INT) deaths
-    FROM staging_us_deaths JOIN
-    (select county_id, county, states.state_id, states.state from counties join states on counties.state_id = states.state_id) cs
-    on staging_us_deaths.county = cs.county
-    and staging_us_deaths.state = cs.state
-""")
-
-global_deaths_temp_create = (""" CREATE TABLE if not exists global_deaths_temp(
-        country_id int,
-        state_id int,
-        dt date,
-        deaths int
-)
-""")
-
-global_deaths_temp_insert = ("""
-    INSERT INTO global_deaths_temp (country_id, state_id, dt, deaths)
-
-    -- global data by country/state level, excluding US
-    SELECT country_id, state_id, dt, CAST(deaths as INT) deaths
+deaths_temp_insert = ("""
+    INSERT INTO deaths_temp (location_id, dt, deaths)
+    (SELECT location_id, dt, CAST(deaths as INT) deaths
     FROM staging_global_deaths
-    LEFT JOIN
-    (select c.country_id, s.state_id, c.country, s.state from states s
-     right join countries c
-     on s.country_id = c.country_id ) as sc
-    on staging_global_deaths.country = sc.country
-    and (staging_global_deaths.state = sc.state or (staging_global_deaths.state iS NULL and sc.state IS NULL))
-    and staging_global_deaths.country != 'US'
+    JOIN location
+    on staging_global_deaths.country <> 'US'
+    and ((staging_global_deaths.country || staging_global_deaths.state = location.country || location.state) or (staging_global_deaths.state IS NULL and location.state IS NULL and staging_global_deaths.country =  location.country)))
 
     UNION
 
-    -- get US data by state level
-    SELECT sc.country_id, sc.state_id, dt, deaths from
-
-        -- US deaths, group counties by state
-        ((SELECT country, state, dt, CAST(sum(deaths) as INT) deaths
-        FROM staging_us_deaths
-        GROUP BY country, state, dt) as us
-
-        JOIN
-
-        /* Must match on state AND country to get correct state_id
-        Else you bring in Princess cruises twice (US & Can)
-        */
-
-        (select c.country_id, s.state_id, c.country, s.state from states s
-         join countries c
-         on s.country_id = c.country_id ) as sc
-
-        on us.state = sc.state and us.country = sc.country)
+    (SELECT location_id, dt, deaths FROM
+    staging_us_deaths
+    JOIN location
+    on (staging_us_deaths.county || staging_us_deaths.state = location.county || location.state) or (staging_us_deaths.county IS NULL and staging_us_deaths.country || staging_us_deaths.state = location.country || location.state)
+    )
 """)
 
-
-global_recovered_temp_create = (""" CREATE TABLE if not exists global_recovered_temp(
-        country_id int,
-        state_id int,
+recovered_temp_create = (""" CREATE TABLE IF NOT EXISTS recovered_temp(
+        location_id int,
         dt date,
         recovered int
 )
 """)
 
-
-global_recovered_temp_insert = ("""
-    INSERT INTO global_recovered_temp (country_id, state_id, dt, recovered)
-
-    -- global data by country/state level, excluding US
-    SELECT country_id, state_id, dt, CAST(recovered as INT) recovered
+recovered_temp_insert = ("""
+    INSERT INTO recovered_temp (location_id, dt, recovered)
+    SELECT location_id, dt, CAST(recovered as INT) recovered
     FROM staging_global_recovered
-    LEFT JOIN
-    (select c.country_id, s.state_id, c.country, s.state from states s
-     right join countries c
-     on s.country_id = c.country_id ) as sc
-    on staging_global_recovered.country = sc.country
-    and (staging_global_recovered.state = sc.state or (staging_global_recovered.state iS NULL and sc.state IS NULL))
-    and staging_global_recovered.country != 'US'
-
+    JOIN location
+    on staging_global_recovered.country <> 'US'
+    and ((staging_global_recovered.country || staging_global_recovered.state = location.country || location.state) or (staging_global_recovered.state IS NULL and location.state IS NULL and staging_global_recovered.country =  location.country))
 """)
 
-fact_counties_create = ("""
-    CREATE TABLE if NOT EXISTS fact_counties (
-        county_id int,
+# ---------------- FACT TABLES -------------
+
+fact_metrics_create = ("""
+    CREATE TABLE if NOT EXISTS fact_metrics (
+        location_id int,
         dt date,
         confirmed int,
         deaths int,
-        recovered int
+        recovered int,
+        PRIMARY KEY(location_id, dt)
     )
 """)
 
-fact_counties_insert = ("""
-        select coalesce(d.county_id, c.county_id) county_id, coalesce(d.dt, c.dt) dt, coalesce(c.confirmed, 0) confirmed, coalesce(d.deaths, 0) deaths
-        from counties_deaths_temp d
-        full outer join counties_confirmed_temp c on d.county_id = c.county_id and d.dt = c.dt
+# creates the first fact table show US us by confirmed/deaths
+fact_metrics_insert = ("""
+        INSERT INTO fact_metrics (location_id, dt, confirmed, deaths, recovered)
+        SELECT * FROM
+        (SELECT COALESCE(d.location_id, c.location_id, r.location_id) location_id, COALESCE(d.dt, c.dt, r.dt) dt, COALESCE(c.confirmed, 0) confirmed, COALESCE(d.deaths, 0) deaths, COALESCE(r.recovered, 0) recovered
+        FROM confirmed_temp c
+        FULL OUTER JOIN deaths_temp d on d.location_id = c.location_id and d.dt = c.dt
+        FULL OUTER JOIN recovered_temp r on r.location_id = c.location_id and r.dt = c.dt)
+        ORDER BY location_id, dt
 """)
 
-fact_global_create = ("""
-    CREATE TABLE if NOT EXISTS fact_global (
-        country_id int,
-        state_id int,
-        dt date,
-        confirmed int,
-        deaths int,
-        recovered int
-    )
+
+# ---------------- COUNT TABLES -------------
+count_fact_global = ("""
+        SELECT COUNT(*) FROM fact_global
 """)
 
-fact_global_insert = ("""
-        select coalesce(d.country_id, c.country_id, r.country_id) country_id, coalesce(d.state_id, c.state_id, r.state_id) state_id, coalesce(d.dt, c.dt, r.dt) dt, coalesce(c.confirmed, 0) confirmed, coalesce(d.deaths, 0) deaths, coalesce(r.recovered, 0) recovered
-        from global_deaths_temp d
-        full outer join global_confirmed_temp c on d.country_id = c.country_id and d.state_id = c.state_id and d.dt = c.dt
-        full outer join global_recovered_temp r on r.country_id = d.country_id and r.state_id = d.state_id and r.dt = d.dt
+count_fact_metrics = ("""
+        SELECT COUNT(*) FROM fact_metrics
 """)
 
-base_queries = ['staging_counties_confirmed', 'staging_global_confirmed', 'staging_us_deaths', 'staging_global_deaths', 'staging_global_recovered', 'dim_countries', 'dim_states', 'dim_counties', 'dim_time', 'counties_confirmed_temp', 'global_confirmed_temp', 'counties_deaths_temp', 'global_deaths_temp', 'global_recovered_temp']
+# ---------------- CHECK NULL TABLES -------------
+isnull_fact_global = ("""
+        SELECT COUNT(*) FROM fact_global WHERE confirmed IS NULL or deaths iS NULL or recovered IS NULL
+""")
+
+isnull_fact_metrics = ("""
+        SELECT COUNT(*) FROM fact_metrics WHERE confirmed IS NULL or deaths iS NULL
+""")
+
+# ---------------- LIST OF QUERIES -------------
+base_queries = ['staging_us_confirmed', 'staging_global_confirmed', 'staging_us_deaths', 'staging_global_deaths', 'staging_global_recovered', 'dim_location', 'dim_time', 'confirmed_temp', 'deaths_temp', 'recovered_temp', 'fact_metrics']
+
+#'us_confirmed_temp', 'confirmed_temp', 'us_deaths_temp', 'global_deaths_temp', 'global_recovered_temp', 'fact_metrics', 'temp_fact_global', 'fact_global']
 
 
 create_table_queries = [eval(query + '_create') for query in base_queries]
@@ -404,4 +284,6 @@ drop_table_queries = [eval(query + '_drop') for query in base_queries]
 copy_table_queries = [eval(query + '_copy') for query in base_queries if 'staging' in query]
 insert_table_queries = [eval(query + '_insert') for query in base_queries if 'staging' not in query]
 
-count_queries = []
+#count_queries = {'fact_metrics': count_fact_metrics}
+
+#isnull_queries = {'fact_metrics': isnull_fact_metrics}

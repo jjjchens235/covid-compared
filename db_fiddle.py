@@ -1,17 +1,5 @@
 
-import py
-
-
-context manager
-
-with file as f:
-    f.write('txt')
-
-print('hello')
-
-ff = file()
-ff.write()
-ff.close()
+db_fiddle_url = 'https://www.db-fiddle.com/f/hRZGF5beVzoKPvNGm8wcGr/2'
 
 #confirmed
 create table us_confirmed (dt date, country varchar(10), state varchar(20), county varchar(100), confirmed int);
@@ -32,17 +20,6 @@ values ('2020-05-01', 'USA', 'CA', 'Los Angeles', 8);
 insert into us_deaths (dt, country, state, county, deaths)
 values ('2020-05-02', 'USA', 'AK', 'Juneau', 1);
 
-
-
-
-#global_confirmed
-create table us_confirmed (dt date, country varchar(10), state varchar(20), county varchar(100), confirmed int);
-
-insert into us_confirmed (dt, country, state, county, confirmed)
-values ('2020-05-01', 'USA', 'CA', 'Los Angeles', 5);
-
-insert into us_confirmed (dt, country, state, county, confirmed)
-values ('2020-05-02', 'USA', 'CA', 'Riverside', 9);
 
 
 create table us_recovered (dt date, country varchar(10), state varchar(20), county varchar(100), recovered int);
