@@ -245,23 +245,68 @@ fact_metrics_create = ("""
 # creates the first fact table show US us by confirmed/deaths
 fact_metrics_insert = ("""
         INSERT INTO fact_metrics (location_id, dt, confirmed, deaths, recovered)
-        SELECT * FROM
-        (SELECT COALESCE(d.location_id, c.location_id, r.location_id) location_id, COALESCE(d.dt, c.dt, r.dt) dt, COALESCE(c.confirmed, 0) confirmed, COALESCE(d.deaths, 0) deaths, COALESCE(r.recovered, 0) recovered
+        SELECT COALESCE(d.location_id, c.location_id, r.location_id) location_id, COALESCE(d.dt, c.dt, r.dt) dt, COALESCE(c.confirmed, 0) confirmed, COALESCE(d.deaths, 0) deaths, COALESCE(r.recovered, 0) recovered
         FROM confirmed_temp c
         FULL OUTER JOIN deaths_temp d on d.location_id = c.location_id and d.dt = c.dt
-        FULL OUTER JOIN recovered_temp r on r.location_id = c.location_id and r.dt = c.dt)
-        ORDER BY location_id, dt
+        FULL OUTER JOIN recovered_temp r on r.location_id = c.location_id and r.dt = c.dt
 """)
 
 
 # ---------------- COUNT TABLES -------------
-count_fact_global = ("""
-        SELECT COUNT(*) FROM fact_global
+count_staging_us_confirmed = ("""
+        SELECT COUNT(*) FROM staging_us_confirmed
+""")
+
+count_staging_global_confirmed = ("""
+        SELECT COUNT(*) FROM staging_global_confirmed
+        WHERE COUNTRY <> 'US'
 """)
 
 count_fact_metrics = ("""
         SELECT COUNT(*) FROM fact_metrics
 """)
+
+
+# ---------------- CHECK SUM CONFIRMED -------------
+sum_staging_us_confirmed = ("""
+        SELECT SUM(confirmed) FROM staging_us_confirmed
+""")
+
+sum_staging_global_confirmed = ("""
+        SELECT SUM(confirmed) FROM staging_global_confirmed
+        WHERE COUNTRY <> 'US'
+""")
+
+sum_fact_confirmed = ("""
+        SELECT SUM(confirmed) FROM fact_metrics
+""")
+
+# ---------------- CHECK SUM DEATHS -------------
+sum_staging_us_deaths = ("""
+        SELECT SUM(deaths) FROM staging_us_deaths
+""")
+
+sum_staging_global_deaths = ("""
+        SELECT SUM(deaths) FROM staging_global_deaths
+        WHERE COUNTRY <> 'US'
+""")
+
+sum_fact_deaths = ("""
+        SELECT SUM(deaths) FROM fact_metrics
+""")
+
+
+# ---------------- CHECK SUM RECOVERED -------------
+
+sum_staging_global_recovered = ("""
+        SELECT SUM(recovered) FROM staging_global_recovered
+        WHERE COUNTRY NOT IN ('US', 'Canada')
+""")
+
+sum_fact_recovered = ("""
+        SELECT SUM(recovered) FROM fact_metrics
+""")
+
 
 # ---------------- CHECK NULL TABLES -------------
 isnull_fact_global = ("""
@@ -284,6 +329,9 @@ drop_table_queries = [eval(query + '_drop') for query in base_queries]
 copy_table_queries = [eval(query + '_copy') for query in base_queries if 'staging' in query]
 insert_table_queries = [eval(query + '_insert') for query in base_queries if 'staging' not in query]
 
-#count_queries = {'fact_metrics': count_fact_metrics}
+count_queries = [count_staging_us_confirmed, count_staging_global_confirmed, count_fact_metrics]
+sum_confirmed = [sum_staging_us_confirmed, sum_staging_global_confirmed, sum_fact_confirmed]
+sum_deaths = [sum_staging_us_deaths, sum_staging_global_deaths, sum_fact_deaths]
+sum_recovered = [sum_staging_global_recovered, sum_fact_recovered]
 
-#isnull_queries = {'fact_metrics': isnull_fact_metrics}
+isnull_queries = {'fact_metrics': isnull_fact_metrics}

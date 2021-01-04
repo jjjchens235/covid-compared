@@ -8,7 +8,6 @@ class CovidDF():
         self.title = title
         self.gb = gb
         if 'confirmed' in title:
-            print(title)
             self.gb = self.gb + ['Population']
         self.val_col = val_col
 
@@ -30,8 +29,8 @@ class CovidData:
         global_deaths_url = f'{BASE_URL}/time_series_covid19_deaths_global.csv'
         global_recovered_url = f'{BASE_URL}/time_series_covid19_recovered_global.csv'
         population_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv'
-        self.population = CovidDF(pd.read_csv(population_url, error_bad_lines=False)[['Combined_Key', 'Population']], 'population', 'None', 'None')
 
+        self.population = CovidDF(pd.read_csv(population_url, error_bad_lines=False)[['Combined_Key', 'Population']], 'population', 'None', 'None')
         self.us_confirmed = CovidDF(pd.read_csv(us_confirmed_url, error_bad_lines=False), 'us_confirmed', self.GB_US, self.CONFIRMED)
         self.global_confirmed = CovidDF(pd.read_csv(global_confirmed_url, error_bad_lines=False), 'global_confirmed', self.GB_GLOBAL, self.CONFIRMED)
 
@@ -43,10 +42,12 @@ class CovidData:
         self.DFs = [self.us_confirmed, self.global_confirmed, self.us_deaths, self.global_deaths, self.global_recovered]
 
     def join_population(self):
-        #self.global_confirmed['Combined_Key'] = self.global_confirmed['State'].fillna('') + self.global_confirmed['Country']
-        self.global_confirmed.df['Combined_Key'] = (self.global_confirmed.df['State'] + ', ').fillna('') + self.global_confirmed.df['Country']
-        self.global_confirmed.df = self.global_confirmed.df.merge(self.population.df, on='Combined_Key')
+        #update Combined Key per this https://github.com/CSSEGISandData/COVID-19/issues/2440
+        self.population.df['Combined_Key'] = self.population.df['Combined_Key'].str.replace(' ', '')
+        self.us_confirmed.df['Combined_Key'] = self.us_confirmed.df['Combined_Key'].str.replace(' ', '')
+        self.global_confirmed.df['Combined_Key'] = ((self.global_confirmed.df['State'] + ',').fillna('') + self.global_confirmed.df['Country']).str.replace(' ', '')
 
+        self.global_confirmed.df = self.global_confirmed.df.merge(self.population.df, on='Combined_Key')
         self.us_confirmed.df = self.us_confirmed.df.merge(self.population.df, on='Combined_Key')
 
     def clean(self, df):
@@ -77,7 +78,6 @@ class CovidData:
 
     def melt_cols(self, df, id_vars, value_name):
         date_cols = self.get_date_cols(df)
-        print(f'id_vars: {id_vars}')
         #print(f'date_cols: {date_cols}')
         cols_to_keep = id_vars + date_cols
         df = df[cols_to_keep]

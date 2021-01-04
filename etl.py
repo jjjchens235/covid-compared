@@ -1,6 +1,6 @@
 import configparser
 import psycopg2
-from sql_queries import copy_table_queries, insert_table_queries #, count_queries, isnull_queries
+from sql_queries import copy_table_queries, insert_table_queries, count_queries, sum_confirmed, sum_deaths, sum_recovered, isnull_queries
 
 
 def load_staging_tables(cur, conn):
@@ -22,15 +22,63 @@ def insert_tables(cur, conn):
         conn.commit()
 
 
-def count_tables(cur, conn):
+count_staging_us_confirmed = ("""
+        SELECT COUNT(*) FROM staging_us_confirmed
+        WHERE COUNTRY <> 'US'
+""")
+
+count_staging_global_confirmed = ("""
+        SELECT COUNT(*) FROM staging_global_confirmed
+""")
+
+count_fact_metrics = ("""
+        SELECT COUNT(*) FROM fact_metrics
+""")
+
+
+def check_counts(cur, conn):
     '''
     analytical queries to make sure row counts are valid
     '''
-    for table_name, query in count_queries.items():
-        #print(query)
-        cur.execute(query)
-        results = cur.fetchone()
-        print(f'For table {table_name}, the count is {results[0]}')
+    cur.execute(count_queries[0])
+    us_count = cur.fetchone()[0]
+    cur.execute(count_queries[1])
+    global_count = cur.fetchone()[0]
+    cur.execute(count_queries[2])
+    fact_count = cur.fetchone()[0]
+    diff = us_count + global_count - fact_count
+    print(f'Difference in row count (staging-fact): {diff}')
+
+
+def check_sum_confirmed(cur, conn):
+    cur.execute(sum_confirmed[0])
+    us_sum = cur.fetchone()[0]
+    cur.execute(sum_confirmed[1])
+    global_sum = cur.fetchone()[0]
+    cur.execute(sum_confirmed[2])
+    fact_sum = cur.fetchone()[0]
+    diff = us_sum + global_sum - fact_sum
+    print(f'Difference in confirmed sums: {diff}')
+
+
+def check_sum_deaths(cur, conn):
+    cur.execute(sum_deaths[0])
+    us_sum = cur.fetchone()[0]
+    cur.execute(sum_deaths[1])
+    global_sum = cur.fetchone()[0]
+    cur.execute(sum_deaths[2])
+    fact_sum = cur.fetchone()[0]
+    diff = us_sum + global_sum - fact_sum
+    print(f'Difference in deaths sums: {diff}')
+
+
+def check_sum_recovered(cur, conn):
+    cur.execute(sum_recovered[0])
+    global_sum = cur.fetchone()[0]
+    cur.execute(sum_recovered[1])
+    fact_sum = cur.fetchone()[0]
+    diff = global_sum - fact_sum
+    print(f'Difference in recovered sums: {diff}')
 
 
 def isnull_tables(cur, conn):
@@ -54,10 +102,16 @@ def main():
     conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['DWH'].values()))
     cur = conn.cursor()
 
+    '''
     load_staging_tables(cur, conn)
     insert_tables(cur, conn)
-    #count_tables(cur, conn)
-    #isnull_tables(cur, conn)
+
+    '''
+    check_counts(cur, conn)
+    check_sum_confirmed(cur, conn)
+    check_sum_deaths(cur, conn)
+    check_sum_recovered(cur, conn)
+    isnull_tables(cur, conn)
 
     conn.close()
 
