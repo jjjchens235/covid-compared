@@ -23,6 +23,8 @@ recovered_temp_drop = "drop table if exists recovered_temp"
 fact_metrics_drop = "drop table if exists fact_metrics"
 #fact_global_drop = "drop table if exists fact_global"
 
+aws_s3_extension = 'CREATE EXTENSION IF NOT EXISTS aws_s3 cascade;'
+
 # ---------------- STAGING TABLES -------------
 
 staging_us_confirmed_create = ("""CREATE TABLE IF NOT EXISTS staging_us_confirmed(
@@ -37,15 +39,13 @@ staging_us_confirmed_create = ("""CREATE TABLE IF NOT EXISTS staging_us_confirme
 """)
 
 staging_us_confirmed_copy = ("""
-        copy staging_us_confirmed FROM {data_bucket}
-        credentials 'aws_iam_role={role_arn}'
-        region 'us-west-2'
-        delimiter as '\\t'
-        DATEFORMAT 'YYYY-MM-DD'
-        EMPTYASNULL
-        IGNOREHEADER 1;
-    """).format(data_bucket=cfg.get('S3', 'US_CONFIRMED'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
-
+    SELECT aws_s3.table_import_from_s3(
+       'staging_us_confirmed',
+       'country, iso2, state, county, population, dt, confirmed',
+       '(FORMAT csv, DELIMITER E''\\t'', HEADER true)',
+       aws_commons.create_s3_uri({s3_bucket}, {s3_key}, {region})
+    );
+""").format(s3_bucket=cfg.get('S3', 'S3_BUCKET'), s3_key=cfg.get('S3', 'US_CONFIRMED'), region=cfg.get('S3', 'REGION'))
 
 staging_global_confirmed_create = ("""CREATE TABLE IF NOT EXISTS staging_global_confirmed(
         country varchar,
@@ -57,14 +57,13 @@ staging_global_confirmed_create = ("""CREATE TABLE IF NOT EXISTS staging_global_
 """)
 
 staging_global_confirmed_copy = ("""
-        copy staging_global_confirmed FROM {data_bucket}
-        credentials 'aws_iam_role={role_arn}'
-        region 'us-west-2'
-        delimiter as '\\t'
-        DATEFORMAT 'YYYY-MM-DD'
-        EMPTYASNULL
-        IGNOREHEADER 1;
-    """).format(data_bucket=cfg.get('S3', 'GLOBAL_CONFIRMED'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
+    SELECT aws_s3.table_import_from_s3(
+       'staging_global_confirmed',
+       'country, state, population, dt, confirmed',
+       '(FORMAT csv, DELIMITER E''\\t'', HEADER true)',
+       aws_commons.create_s3_uri({s3_bucket}, {s3_key}, {region})
+    );
+""").format(s3_bucket=cfg.get('S3', 'S3_BUCKET'), s3_key=cfg.get('S3', 'GLOBAL_CONFIRMED'), region=cfg.get('S3', 'REGION'))
 
 
 staging_us_deaths_create = ("""CREATE TABLE IF NOT EXISTS staging_us_deaths(
@@ -78,14 +77,13 @@ staging_us_deaths_create = ("""CREATE TABLE IF NOT EXISTS staging_us_deaths(
 """)
 
 staging_us_deaths_copy = ("""
-        copy staging_us_deaths FROM {data_bucket}
-        credentials 'aws_iam_role={role_arn}'
-        region 'us-west-2'
-        delimiter as '\\t'
-        DATEFORMAT 'YYYY-MM-DD'
-        EMPTYASNULL
-        IGNOREHEADER 1;
-    """).format(data_bucket=cfg.get('S3', 'US_DEATH'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
+    SELECT aws_s3.table_import_from_s3(
+       'staging_us_deaths',
+       'country, iso2, state, county, dt, deaths',
+       '(FORMAT csv, DELIMITER E''\\t'', HEADER true)',
+       aws_commons.create_s3_uri({s3_bucket}, {s3_key}, {region})
+    );
+""").format(s3_bucket=cfg.get('S3', 'S3_BUCKET'), s3_key=cfg.get('S3', 'US_DEATHS'), region=cfg.get('S3', 'REGION'))
 
 
 staging_global_deaths_create = ("""CREATE TABLE IF NOT EXISTS staging_global_deaths(
@@ -96,15 +94,15 @@ staging_global_deaths_create = ("""CREATE TABLE IF NOT EXISTS staging_global_dea
 )
 """)
 
+
 staging_global_deaths_copy = ("""
-        copy staging_global_deaths FROM {data_bucket}
-        credentials 'aws_iam_role={role_arn}'
-        region 'us-west-2'
-        delimiter as '\\t'
-        DATEFORMAT 'YYYY-MM-DD'
-        EMPTYASNULL
-        IGNOREHEADER 1;
-    """).format(data_bucket=cfg.get('S3', 'GLOBAL_DEATH'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
+    SELECT aws_s3.table_import_from_s3(
+       'staging_global_deaths',
+       'country, state, dt, deaths',
+       '(FORMAT csv, DELIMITER E''\\t'', HEADER true)',
+       aws_commons.create_s3_uri({s3_bucket}, {s3_key}, {region})
+    );
+""").format(s3_bucket=cfg.get('S3', 'S3_BUCKET'), s3_key=cfg.get('S3', 'GLOBAL_CONFIRMED'), region=cfg.get('S3', 'REGION'))
 
 
 staging_global_recovered_create = ("""CREATE TABLE IF NOT EXISTS staging_global_recovered(
@@ -116,19 +114,18 @@ staging_global_recovered_create = ("""CREATE TABLE IF NOT EXISTS staging_global_
 """)
 
 staging_global_recovered_copy = ("""
-        copy staging_global_recovered FROM {data_bucket}
-        credentials 'aws_iam_role={role_arn}'
-        region 'us-west-2'
-        delimiter as '\\t'
-        DATEFORMAT 'YYYY-MM-DD'
-        EMPTYASNULL
-        IGNOREHEADER 1;
-    """).format(data_bucket=cfg.get('S3', 'GLOBAL_RECOVERED'), role_arn=cfg.get('IAM_ROLE', 'ARN'))
+    SELECT aws_s3.table_import_from_s3(
+       'staging_global_recovered',
+       'country, state, dt, recovered',
+       '(FORMAT csv, DELIMITER E''\\t'', HEADER true)',
+       aws_commons.create_s3_uri({s3_bucket}, {s3_key}, {region})
+    );
+""").format(s3_bucket=cfg.get('S3', 'S3_BUCKET'), s3_key=cfg.get('S3', 'GLOBAL_RECOVERED'), region=cfg.get('S3', 'REGION'))
 
 # ---------------- DiM TABLES -------------
 
 dim_location_create = (""" CREATE TABLE IF NOT EXISTS location(
-        location_id INTEGER Identity(0, 1) PRIMARY KEY,
+        location_id INTEGER GENERATED BY DEFAULT as Identity PRIMARY KEY,
         country varchar,
         state varchar,
         iso2 varchar,
@@ -320,13 +317,11 @@ isnull_fact_metrics = ("""
 # ---------------- LIST OF QUERIES -------------
 base_queries = ['staging_us_confirmed', 'staging_global_confirmed', 'staging_us_deaths', 'staging_global_deaths', 'staging_global_recovered', 'dim_location', 'dim_time', 'confirmed_temp', 'deaths_temp', 'recovered_temp', 'fact_metrics']
 
-#'us_confirmed_temp', 'confirmed_temp', 'us_deaths_temp', 'global_deaths_temp', 'global_recovered_temp', 'fact_metrics', 'temp_fact_global', 'fact_global']
-
-
 create_table_queries = [eval(query + '_create') for query in base_queries]
 drop_table_queries = [eval(query + '_drop') for query in base_queries]
 
 copy_table_queries = [eval(query + '_copy') for query in base_queries if 'staging' in query]
+
 insert_table_queries = [eval(query + '_insert') for query in base_queries if 'staging' not in query]
 
 count_queries = [count_staging_us_confirmed, count_staging_global_confirmed, count_fact_metrics]

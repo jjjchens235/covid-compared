@@ -1,6 +1,6 @@
 import configparser
 import psycopg2
-from sql_queries import copy_table_queries, insert_table_queries, count_queries, sum_confirmed, sum_deaths, sum_recovered, isnull_queries
+from sql_queries import aws_s3_extension, copy_table_queries, insert_table_queries, count_queries, sum_confirmed, sum_deaths, sum_recovered, isnull_queries
 
 
 def load_staging_tables(cur, conn):
@@ -8,6 +8,7 @@ def load_staging_tables(cur, conn):
     insert into the two staging tables
     '''
     for query in copy_table_queries:
+        print(query)
         cur.execute(query)
         conn.commit()
 
@@ -101,12 +102,11 @@ def main():
 
     conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['DWH'].values()))
     cur = conn.cursor()
+    cur.execute(aws_s3_extension)
 
-    '''
     load_staging_tables(cur, conn)
     insert_tables(cur, conn)
 
-    '''
     check_counts(cur, conn)
     check_sum_confirmed(cur, conn)
     check_sum_deaths(cur, conn)
