@@ -55,8 +55,9 @@ CREATE TABLE IF NOT EXISTS location(
 				state varchar,
 				iso2 varchar,
 				county varchar,
-				population int
-				sc_key varchar
+				population int,
+				state_country varchar,
+				county_state_country varchar
 );
 
 CREATE TABLE IF NOT EXISTS time(
@@ -67,7 +68,7 @@ CREATE TABLE IF NOT EXISTS time(
 				weekday int
 );
 
--- ---------------- TEMP FACT TABLES -------------
+-- ---------------- TEMP FACT TABLE -------------
 -- ----- get foreign keys for our intermediate fact tables
 
 CREATE TABLE IF NOT EXISTS confirmed_temp(
@@ -89,7 +90,7 @@ CREATE TABLE IF NOT EXISTS recovered_temp(
 );
 
 
--- ---------------- FACT TABLES -------------
+-- ---------------- FACT TABLE -------------
 
 CREATE TABLE if NOT EXISTS fact_metrics (
 		location_id int,

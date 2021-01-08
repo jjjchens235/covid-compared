@@ -58,12 +58,23 @@ class CovidData:
         for DF in self.DFs:
             self.clean(DF.df)
 
-    def save_csv(self, df, name):
-        df.to_csv(f'/Users/jwong/Documents/{name}_diff.csv', sep='\t', index=False)
+    def save_csv(self, df, path, title, is_s3=False):
+        f = f'{path}{title}_diff.csv'
+        if is_s3:
+            import s3fs
+            s3 = s3fs.S3FileSystem(anon=False)
+            f = s3.open(f, 'w')
+        df.to_csv(f, sep='\t', index=False)
 
-    def save_all_csv(self):
+    def save_csv_local(self):
         for DF in self.DFs:
-            self.save_csv(DF.df, DF.title)
+            self.save_csv(DF.df, '/Users/jwong/Documents/', DF.title)
+
+    def save_csv_s3(self):
+        bucket_title = 's3://covid-data-jh-normalized/'
+        for DF in self.DFs:
+            print(f'saving to s3: {DF.title}')
+            self.save_csv(DF.df, bucket_title, DF.title, True)
 
     def get_date_cols(self, df):
         pattern = re.compile(r'\d{1,2}/\d{1,2}/\d{2}')
@@ -106,4 +117,4 @@ if __name__ == '__main__':
     covid.melt_dfs()
     covid.get_daily_totals_dfs()
 
-    covid.save_all_csv()
+    covid.save_csv_s3()
