@@ -58,11 +58,12 @@ class CovidData:
         for DF in self.DFs:
             self.clean(DF.df)
 
-    def save_csv(self, df, path, title, is_s3=False):
+    def save_csv(self, df, path, title, aws_key=None, aws_secret=None):
         f = f'{path}{title}_diff.csv'
-        if is_s3:
+        if aws_key:
             import s3fs
-            s3 = s3fs.S3FileSystem(anon=False)
+            s3 = s3fs.S3FileSystem(key=aws_key, secret=aws_secret)
+            print(f'saving to s3: {f}')
             f = s3.open(f, 'w')
         df.to_csv(f, sep='\t', index=False)
 
@@ -70,11 +71,10 @@ class CovidData:
         for DF in self.DFs:
             self.save_csv(DF.df, '/Users/jwong/Documents/', DF.title)
 
-    def save_csv_s3(self):
+    def save_csv_s3(self, aws_key, aws_secret):
         bucket_title = 's3://covid-data-jh-normalized/'
         for DF in self.DFs:
-            print(f'saving to s3: {DF.title}')
-            self.save_csv(DF.df, bucket_title, DF.title, True)
+            self.save_csv(DF.df, bucket_title, DF.title, aws_key, aws_secret)
 
     def get_date_cols(self, df):
         pattern = re.compile(r'\d{1,2}/\d{1,2}/\d{2}')
@@ -109,7 +109,7 @@ class CovidData:
             DF.df = self.get_daily_totals(DF.df, DF.gb, DF.val_col)
 
 
-if __name__ == '__main__':
+def main(aws_key, aws_secret):
     covid = CovidData()
     covid.clean_all()
     covid.join_population()
@@ -117,4 +117,8 @@ if __name__ == '__main__':
     covid.melt_dfs()
     covid.get_daily_totals_dfs()
 
-    covid.save_csv_s3()
+    covid.save_csv_s3(aws_key, aws_secret)
+
+
+if __name__ == '__main__':
+    main()

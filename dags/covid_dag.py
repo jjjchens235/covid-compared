@@ -1,13 +1,17 @@
 #docker run -d -p 8080:8080 -v /Users/jwong/Programming/Python/DEngineering/covid_de/dags/:/usr/local/airflow/dags 74a09a6af034 webserver
 
 from airflow import DAG
-from airflow.operators import BashOperator, PythonOperator, PostgresOperator
+from airflow.operators.bash_operator import BashOperator
+from airflow.operators.python_operator import PythonOperator
+from airflow.operators.postgres_operator import PostgresOperator
 from airflow.hooks.base_hook import BaseHook
 from datetime import datetime, timedelta
 import os
 import json
 import psycopg2
 import re
+
+from scripts.covid_pandas import main
 
 json_path = './dags/config/s3_config.json'
 with open(json_path) as file:
@@ -22,13 +26,14 @@ os.environ['GLOBAL_DEATHS'] = env['GLOBAL_DEATHS']
 os.environ['GLOBAL_RECOVERED'] = env['GLOBAL_RECOVERED']
 
 
-c = BaseHook.get_connection('rds')
+rds = BaseHook.get_connection('rds')
+aws = BaseHook.get_connection('aws_default')
 
 # Following are defaults which can be overridden later on
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
-    'start_date': datetime(2021, 1, 7),
+    'start_date': datetime(2021, 1, 10),
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
     'email_on_retry': False,
@@ -45,10 +50,10 @@ class SQLTemplatedPythonOperator(PythonOperator):
 
 
 def drop_tables(sql_path):
-    with psycopg2.connect(f"host={c.host} dbname={c.schema} user={c.login} password={c.password} port={c.port}") as conn:
+    with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
         cur = conn.cursor()
-        print(f'hello world: {sql_path}')
-        with open(sql_path, 'r') as fd:
+        print(f'hello world: {sql_path}.sql')
+        with open(sql_path + '.sql', 'r') as fd:
             sqlfile = fd.read()
             sql_commands = sqlfile.split(';')
             for query in sql_commands:
@@ -64,7 +69,7 @@ def validate_metric(upstream_tables, fact_table, metric):
     #for each upstream table (staging us/staging global), we want to get increment the sumof the upstream total
     #Then we compare it against the fact table metric
 
-    with psycopg2.connect(f"host={c.host} dbname={c.schema} user={c.login} password={c.password} port={c.port}") as conn:
+    with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
         cur = conn.cursor()
 
         upstream_sum = 0
@@ -97,17 +102,19 @@ def validate_metric(upstream_tables, fact_table, metric):
         raise ValueError("Diff exceeeded threahhold")
 
 
-load_to_s3 = BashOperator(
+load_to_s3 = PythonOperator(
     task_id='data_to_s3',
-    bash_command='python /usr/local/airflow/dags/scripts/covid_pandas.py ',
-    dag=dag)
+    dag=dag,
+    python_callable=main,
+    op_args=[aws.login, aws.password]
+)
 
 
 drop_existing = SQLTemplatedPythonOperator(
     task_id='drop_existing',
     dag=dag,
     python_callable=drop_tables,
-    op_args=['./dags/sql/drop_tables.sql']
+    op_args=['./dags/sql/drop_tables']
 )
 
 create_tables = PostgresOperator(
@@ -204,7 +211,7 @@ drop_temp = SQLTemplatedPythonOperator(
     task_id='drop_temp',
     dag=dag,
     python_callable=drop_tables,
-    op_args=['./dags/sql/drop_temp_tables.sql']
+    op_args=['./dags/sql/drop_temp_tables']
 )
 
 
