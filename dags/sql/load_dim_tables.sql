@@ -1,15 +1,15 @@
 
-
 -- Insert dim location table
-INSERT INTO location (country, state, iso2, county, population, state_country, county_state_country)
-SELECT DISTINCT country, state, iso2, county, CAST(population as INT) population, concat(state, country) state_country, concat(county, state, country) county_state_country
-FROM staging_us_confirmed
+INSERT INTO location (location_id, country, state, county, population, combined_key)
+SELECT location_id, country, state, county, CAST(population as INT) population, combined_key FROM staging_location;
 
-UNION
+--insert into iso2 table
+INSERT INTO iso2 (iso2, location_id)
+SELECT iso2, location_id FROM staging_location WHERE iso2 is NOT NULL;
 
-SELECT DISTINCT country, state, NULL as iso2, NULL as county, CAST(population as INT), concat(state, country) state_country, concat(state, country) county_state_country
-FROM staging_global_confirmed;
-
+--insert into lat_lon table
+INSERT INTO lat_lon (lat, lon, location_id)
+SELECT lat, lon, location_id FROM staging_location;
 
 -- Insert dim time table
 INSERT INTO time (dt, year, month, day, weekday)

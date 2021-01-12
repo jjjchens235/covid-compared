@@ -1,5 +1,7 @@
 import pandas as pd
+import numpy as np
 import re
+from random import randint
 
 
 class CovidDF():
@@ -7,8 +9,6 @@ class CovidDF():
         self.df = df
         self.title = title
         self.gb = gb
-        if 'confirmed' in title:
-            self.gb = self.gb + ['Population']
         self.val_col = val_col
 
 
@@ -16,10 +16,10 @@ class CovidData:
     CONFIRMED = 'Confirmed'
     DEATHS = 'Deaths'
     RECOVERED = 'Recovered'
-    GB_US = ['Country', 'iso2', 'State', 'County']
-    GB_GLOBAL = ['Country', 'State']
+    GB_US = ['country', 'state', 'county']
+    GB_GLOBAL = ['country', 'state']
 
-    cols_to_rename = {'Country_Region': 'Country', 'Country/Region': 'Country', 'Province_State': 'State', 'Province/State': 'State', 'Admin2': 'County'}
+    cols_to_rename = {'Country_Region': 'country', 'Country/Region': 'country', 'Province_State': 'state', 'Province/State': 'state', 'Admin2': 'county', 'UID': 'location_id', 'Long_': 'lon', 'Long': 'lon'}
 
     def __init__(self):
         BASE_URL = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series'
@@ -28,9 +28,9 @@ class CovidData:
         us_deaths_url = f'{BASE_URL}/time_series_covid19_deaths_US.csv'
         global_deaths_url = f'{BASE_URL}/time_series_covid19_deaths_global.csv'
         global_recovered_url = f'{BASE_URL}/time_series_covid19_recovered_global.csv'
-        population_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv'
+        location_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv'
 
-        self.population = CovidDF(pd.read_csv(population_url, error_bad_lines=False)[['Combined_Key', 'Population']], 'population', 'None', 'None')
+        self.location = CovidDF(pd.read_csv(location_url, error_bad_lines=False), 'location', 'None', 'None')
         self.us_confirmed = CovidDF(pd.read_csv(us_confirmed_url, error_bad_lines=False), 'us_confirmed', self.GB_US, self.CONFIRMED)
         self.global_confirmed = CovidDF(pd.read_csv(global_confirmed_url, error_bad_lines=False), 'global_confirmed', self.GB_GLOBAL, self.CONFIRMED)
 
@@ -41,22 +41,58 @@ class CovidData:
 
         self.DFs = [self.us_confirmed, self.global_confirmed, self.us_deaths, self.global_deaths, self.global_recovered]
 
-    def join_population(self):
-        #update Combined Key per this https://github.com/CSSEGISandData/COVID-19/issues/2440
-        self.population.df['Combined_Key'] = self.population.df['Combined_Key'].str.replace(' ', '')
-        self.us_confirmed.df['Combined_Key'] = self.us_confirmed.df['Combined_Key'].str.replace(' ', '')
-        self.global_confirmed.df['Combined_Key'] = ((self.global_confirmed.df['State'] + ',').fillna('') + self.global_confirmed.df['Country']).str.replace(' ', '')
+    def add_levels(self):
+        '''
+        Update inconsistent territory levels. For example, China is only by country/state, while France is by both country/state and country only. This means that summing up all the states to get China's total would mean inadvertently double counting France.
 
-        self.global_confirmed.df = self.global_confirmed.df.merge(self.population.df, on='Combined_Key')
-        self.us_confirmed.df = self.us_confirmed.df.merge(self.population.df, on='Combined_Key')
-
-    def clean(self, df):
-        # rename
-        df.rename(columns=self.cols_to_rename, inplace=True)
-
-    def clean_all(self):
+        To fix, this creates a seperate line for each missing level, i.e. create a country line for China
+        '''
         for DF in self.DFs:
-            self.clean(DF.df)
+            df = DF.df
+            if 'global' in DF.title:
+                null_countries = df.loc[df['state'].isnull()]['country'].unique()
+                #China, Aus, France
+                roll_countries = df.loc[~df['country'].isin(null_countries)]
+                rolled = roll_countries.groupby(['country', 'Dt'])[roll_countries.columns[-1]].sum().reset_index()
+                rolled.insert(1, 'state', np.nan)
+                DF.df = pd.concat([df, rolled], axis=0)
+            else:
+                rolled = df.loc[df['county'].notnull()].groupby(['country', 'state', 'Dt'])[df.columns[-1]].sum().reset_index()
+                rolled.insert(3, 'county', np.nan)
+                DF.df = pd.concat([df, rolled], axis=0)
+
+    def rename_all(self):
+        for DF in self.DFs:
+            DF.df.rename(columns=self.cols_to_rename, inplace=True)
+
+    def merge_missing_locations(self):
+        '''
+        The location file provided has a few missing locations (Yakutat, Alaska and Repatriated Travellers, Canada) as of 1/18/2021
+        '''
+        #filter for the columns needed for combined key
+        df_gl = self.global_confirmed.df[['state', 'country', 'Lat', 'lon']]
+        df_us = self.us_confirmed.df[['state', 'country', 'Lat', 'lon', 'iso2', 'county']]
+
+        #create a combined key field in both us and global confirmed
+        df_gl['combined_key'] = (df_gl['state'] + ', ').fillna('') + df_gl['country']
+        df_us['combined_key'] = (df_us['county'] + ', ').fillna('') + (df_us['state'] + ', ').fillna('') + df_us['country']
+
+        #concat row-wise us and global confirmed
+        df_concat = pd.concat([df_gl, df_us], axis=0)
+        df_missing = df_concat.loc[~df_concat['combined_key'].isin(self.location.df['combined_key'])]
+        #create a 6 digit unique id, that's the smallest UID not used in the original location table
+        df_missing['location_id'] = df_missing.groupby('combined_key')['combined_key'].transform(lambda x: randint(100000, 999999))
+        #default 100k
+        df_missing['Population'] = 100000
+        df_missing = df_missing[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon', 'combined_key']]
+        self.location.df = pd.concat([self.location.df, df_missing], axis=0)
+
+    def clean_location(self):
+        self.location.df = self.location.df.rename(columns=self.cols_to_rename)
+        self.location.df = self.location.df[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon']]
+        #have to manually recreate combined_key field since original field isnt consistently formatted
+        self.location.df['combined_key'] = (self.location.df['county'] + ', ').fillna('') + (self.location.df['state'] + ', ').fillna('') + self.location.df['country']
+        self.merge_missing_locations()
 
     def save_csv(self, df, path, title, aws_key=None, aws_secret=None):
         f = f'{path}{title}_diff.csv'
@@ -64,6 +100,7 @@ class CovidData:
             import s3fs
             s3 = s3fs.S3FileSystem(key=aws_key, secret=aws_secret)
             print(f'saving to s3: {f}')
+            print('made it to s3.open')
             f = s3.open(f, 'w')
         df.to_csv(f, sep='\t', index=False)
 
@@ -71,10 +108,12 @@ class CovidData:
         for DF in self.DFs:
             self.save_csv(DF.df, '/Users/jwong/Documents/', DF.title)
 
-    def save_csv_s3(self, aws_key, aws_secret):
-        bucket_title = 's3://covid-data-jh-normalized/'
+    def save_csv_s3(self, aws_key, aws_secret, bucket):
+        #bucket_title = 's3://covid-data-jh-normalized/'
         for DF in self.DFs:
-            self.save_csv(DF.df, bucket_title, DF.title, aws_key, aws_secret)
+            self.save_csv(DF.df, bucket, DF.title, aws_key, aws_secret)
+        #save location
+        self.save_csv(self.location.df, bucket, self.location.title, aws_key, aws_secret)
 
     def get_date_cols(self, df):
         pattern = re.compile(r'\d{1,2}/\d{1,2}/\d{2}')
@@ -109,15 +148,19 @@ class CovidData:
             DF.df = self.get_daily_totals(DF.df, DF.gb, DF.val_col)
 
 
-def main(aws_key, aws_secret):
+def main(aws_key, aws_secret, bucket):
     covid = CovidData()
-    covid.clean_all()
-    covid.join_population()
+    covid.rename_all()
     print(covid.us_confirmed.df.head())
+    covid.clean_location()
+    print('made it to melt_df')
     covid.melt_dfs()
+    print('made it to daily total')
     covid.get_daily_totals_dfs()
+    print('made it add_levels')
+    covid.add_levels()
 
-    covid.save_csv_s3(aws_key, aws_secret)
+    covid.save_csv_s3(aws_key, aws_secret, bucket)
 
 
 if __name__ == '__main__':

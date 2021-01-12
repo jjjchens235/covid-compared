@@ -1,11 +1,10 @@
-import configparser
 import psycopg2
+import configparser
 import pandas as pd
 
 config = configparser.ConfigParser()
-config.read('dwh.cfg')
-
-conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['DWH'].values()))
+config.read('config/rds.cfg')
+conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['RDS'].values()))
 cur = conn.cursor()
 
 """
@@ -65,3 +64,39 @@ print(f'deaths_temp: {df}')
 query = "SELECT (SELECT sum(confirmed) from staging_global_confirmed)=(SELECT count(*) from table2) AS RowCountResult; "
 df = pd.read_sql(query, conn)
 print(f'deaths_temp: {df}')
+
+query = "select * from staging_us_confirmed s left join location l on concat_ws(', ', s.county, s.state, s.country) = l.combined_key"
+df_us = pd.read_sql(query, conn)
+df[df['combined_key'].isnull()].shape
+
+query = "select * from staging_us_confirmed s left join location l on concat_ws(', ', s.county, s.state, s.country) = l.combined_key"
+df_us = pd.read_sql(query, conn)
+df_us[df_us['combined_key'].isnull()]['confirmed'].sum()
+
+
+
+query = "select *, (100000 / population * confirmed) as div from bi_country where combined_key = 'Canada'"
+
+query = """
+SELECT * FROM
+    (SELECT location_id, dt,
+    CASE WHEN COUNT(*) OVER(PARTITION BY location_id ORDER BY dt ROWS BETWEEN 6 PRECEDING AND 0 FOLLOWING) > 6
+    THEN AVG(confirmed) OVER (PARTITION BY location_id ORDER BY dt ROWS BETWEEN 6 PRECEDING AND 0 FOLLOWING)::FLOAT
+    ELSE NULL
+    END AS confirmed,
+
+    CASE WHEN COUNT(*) OVER(PARTITION BY location_id ORDER BY dt ROWS BETWEEN 6 PRECEDING AND 0 FOLLOWING) > 6
+    THEN AVG(deaths) OVER (PARTITION BY location_id ORDER BY dt ROWS BETWEEN 6 PRECEDING AND 0 FOLLOWING)::FLOAT
+    ELSE NULL
+    END AS deaths,
+
+    CASE WHEN COUNT(*) OVER(PARTITION BY location_id ORDER BY dt ROWS BETWEEN 6 PRECEDING AND 0 FOLLOWING) > 6
+    THEN AVG(recovered) OVER (PARTITION BY location_id ORDER BY dt ROWS BETWEEN 6 PRECEDING AND 0 FOLLOWING)::FLOAT
+    ELSE NULL
+    END AS recovered
+
+    FROM fact_metrics) tmp
+where confirmed IS NOT NULL
+"""
+df_ma = pd.read_sql(query, conn)
+df_ma.head(5000).to_csv('/Users/jwong/Cabinet/Out/moving average.csv')
