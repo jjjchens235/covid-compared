@@ -55,11 +55,13 @@ class CovidData:
                 roll_countries = df.loc[~df['country'].isin(null_countries)]
                 rolled = roll_countries.groupby(['country', 'Dt'])[roll_countries.columns[-1]].sum().reset_index()
                 rolled.insert(1, 'state', np.nan)
-                DF.df = pd.concat([df, rolled], axis=0)
+                if not rolled.empty:
+                    DF.df = pd.concat([df, rolled], axis=0)
             else:
                 rolled = df.loc[df['county'].notnull()].groupby(['country', 'state', 'Dt'])[df.columns[-1]].sum().reset_index()
                 rolled.insert(3, 'county', np.nan)
-                DF.df = pd.concat([df, rolled], axis=0)
+                if not rolled.empty:
+                    DF.df = pd.concat([df, rolled], axis=0)
 
     def rename_all(self):
         for DF in self.DFs:
@@ -100,8 +102,8 @@ class CovidData:
             import s3fs
             s3 = s3fs.S3FileSystem(key=aws_key, secret=aws_secret)
             print(f'saving to s3: {f}')
-            print('made it to s3.open')
             f = s3.open(f, 'w')
+        print('finished s3 open')
         df.to_csv(f, sep='\t', index=False)
 
     def save_csv_local(self):
@@ -153,7 +155,6 @@ def main(aws_key, aws_secret, bucket):
     covid.rename_all()
     print(covid.us_confirmed.df.head())
     covid.clean_location()
-    print('made it to melt_df')
     covid.melt_dfs()
     print('made it to daily total')
     covid.get_daily_totals_dfs()

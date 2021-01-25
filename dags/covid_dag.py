@@ -33,8 +33,7 @@ rds = BaseHook.get_connection('rds')
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
-    'start_date': datetime(2021, 1, 20),
-    'schedule_interval': '* 13 * * *',
+    'start_date': datetime(2021, 1, 24),
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
     'email_on_retry': False,
@@ -42,7 +41,7 @@ default_args = {
     'retry_delay': timedelta(minutes=1),
 }
 
-dag = DAG('covid', default_args=default_args)
+dag = DAG('covid2', default_args=default_args, schedule_interval='10 17 * * *')
 
 
 class SQLTemplatedPythonOperator(PythonOperator):
@@ -156,14 +155,12 @@ def deprec_validate_bi_metrics(facts_table, bi_table_type):
                 raise ValueError("Diff exceeeded threshhold")
 
 
-'''
 load_to_s3 = PythonOperator(
     task_id='data_to_s3',
     dag=dag,
     python_callable=main,
     op_args=[env['AWS']['LOGIN'], env['AWS']['PW'], 's3://' + env['S3']['BUCKET'] + '/']
 )
-'''
 
 drop_existing = SQLTemplatedPythonOperator(
     task_id='drop_existing',
@@ -261,5 +258,6 @@ drop_temp = SQLTemplatedPythonOperator(
 )
 
 
-[drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp
+#[drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp
+load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp
 #[load_to_s3, drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp

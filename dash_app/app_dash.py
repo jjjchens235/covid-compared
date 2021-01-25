@@ -78,7 +78,9 @@ def get_territory_options(territory_level):
     return list(df.iloc[:, 0])
 
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, requests_pathname_prefix='/dev/')
+app.server.secret_key = 'QXcky1VpHvS1O7vvPPD691IXFLY3yFp6gjqdak6s'
+server = app.server
 colors = {'bg': '#332F2E', 'dropdown_border': '#99E6FF'}
 
 territory_level_options = ('country', 'state', 'county')
@@ -204,6 +206,9 @@ app.layout = html.Div(children=[
             html.P(
                 children='*** 7 day moving average has been applied for all metrics'
             ),
+            html.P(
+                children='**** Recovered metric is missing for the US for all levels'
+            ),
         ],
         style={'textAlign': 'left', 'margin-left': 60, 'font-size': 14}
     )
@@ -248,4 +253,4 @@ def update_graph(territory_level, territories, metric, per_capita_calc, time_per
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server()
