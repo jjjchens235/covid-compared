@@ -1,0 +1,29 @@
+/* For Show top 5 button */
+.button,
+button,
+input[type="button"] {
+	font-size: 13px;
+	letter-spacing: .05rem;
+	background-color: #f5f5f5;
+	cursor: pointer;
+	border-radius: 20;
+	border-width: 3;
+}
+
+
+/* controls text inside dropdown */
+div.Select-control {
+	textAlign: left;
+}
+
+/* controls placeholder text */
+div.Select–single>.Select-control .Select-value,
+div.Select-placeholder {
+text-align: center;
+background-color: #f5f5f5;
+}
+
+/* controls dropdown dimensions*/ 
+div.dash-dropdown {
+	min-width: 150px;
+}

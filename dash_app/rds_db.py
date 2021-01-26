@@ -1,16 +1,34 @@
 import psycopg2
 import configparser
 import pandas as pd
+import tempfile
 
 config = configparser.ConfigParser()
 config.read('config/dash_app.cfg')
 
 
-def query_rds(query, is_parse_dates=True):
-    #option 1
+def query_rds(query, is_tmp_file=True):
+    #print(query)
     with psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['RDS'].values())) as conn:
-        if is_parse_dates:
-            df = pd.read_sql(query, conn, parse_dates={'dt': '%Y-%m-%d'})
+        if is_tmp_file:
+            return query_tmp_file(query, conn)
         else:
-            df = pd.read_sql(query, conn)
+            return query_read_sql(query, conn)
+
+
+def query_tmp_file(query, conn):
+    '''
+    slightly better performance than native pd.read_sql
+    '''
+    with tempfile.TemporaryFile() as tmpfile:
+        copy_sql = "COPY ({query}) TO STDOUT WITH CSV {head}".format(query=query, head="HEADER")
+        cur = conn.cursor()
+        cur.copy_expert(copy_sql, tmpfile)
+        tmpfile.seek(0)
+        df = pd.read_csv(tmpfile)
+    return df
+
+
+def query_read_sql(query, conn):
+    df = pd.read_sql(query, conn)
     return df

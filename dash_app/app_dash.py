@@ -14,12 +14,17 @@ def __query_territories(territories):
     return f"combined_key = '{territories[0]}'"
 
 
+def __query_highest(territory_level, metric):
+    MIN_POPULATION = 50000
+    return f'combined_key IN (SELECT combined_key FROM bi.bi_{territory_level} WHERE population > {MIN_POPULATION} AND {metric} IS NOT NULL GROUP BY combined_key ORDER BY sum({metric}) DESC LIMIT {TOP_N})'
+
+
 def __query_date(time_period):
     time_period = time_period.lower()
     if time_period == 'all time':
         return ''
     else:
-        max_date = query_rds('SELECT max(dt) dt FROM time', is_parse_dates=False)['dt'].iloc[0]
+        max_date = query_rds('SELECT max(dt) dt FROM dim.time')['dt'].iloc[0]
         days = int(time_period[:2])
         return f"AND (dt > TO_DATE('{max_date}', 'YYYY-MM-DD') - INTERVAL '{days} day')"
 
@@ -38,11 +43,14 @@ def __generate_query(territory_level, territories, metric, per_capita_calc, time
     """
     Based on user selected options, generate the formatted query string
     """
-    cond_territory = __query_territories(territories)
+    if territories is None:
+        cond_territory = __query_highest(territory_level, metric)
+    else:
+        cond_territory = __query_territories(territories)
     cond_date = __query_date(time_period)
 
-    query = f"SELECT combined_key, dt, {metric} FROM bi_{territory_level} bi WHERE {cond_territory} {cond_date} ORDER BY dt"
-    print(query)
+    query = f"SELECT combined_key, dt, {metric} FROM bi.bi_{territory_level} bi WHERE {cond_territory} {cond_date} ORDER BY dt"
+    #print(query)
     return query
 
 
@@ -55,7 +63,9 @@ def get_traces(territory_level, territories, metric, per_capita_calc, time_perio
         metric = f'{metric}_per_capita'
     query = __generate_query(territory_level, territories, metric, per_capita_calc, time_period)
     df_gb = query_rds(query)
-    print(df_gb.tail())
+    #print(df_gb.tail())
+    if territories is None:
+        territories = df_gb['combined_key'].unique()
     for territory in territories:
         df_territory = df_gb.loc[df_gb['combined_key'] == territory]
         trace = go.Scatter(x=df_territory['dt'], y=df_territory[metric], name=territory)
@@ -74,17 +84,15 @@ def get_territory_options(territory_level):
 
     sort_by = __sort_query(territory_level)
     #have to alias combined_key else countries won't render correctly- select combined_key, combined_key
-    query = f"SELECT c_key as combined_key FROM (SELECT DISTINCT combined_key c_key, {sort_by} FROM bi_{territory_level} ORDER BY {sort_by}) tmp"
+    query = f"SELECT c_key as combined_key FROM (SELECT DISTINCT combined_key c_key, {sort_by} FROM bi.bi_{territory_level} ORDER BY {sort_by}) tmp"
     df = query_rds(query)
     return list(df.iloc[:, 0])
 
 
-app = dash.Dash(__name__, requests_pathname_prefix='/dev/')
-config = configparser.ConfigParser()
-config.read('config/dash_app.cfg')
-app.server.secret_key = config.get('ZAPPA', 'SECRET')
-server = app.server
-colors = {'bg_text': '#332F2E', 'dropdown_border': '#99E6FF', 'bg': '#ebf5f6'}
+app = dash.Dash(__name__) # , requests_pathname_prefix='/dev/')# , routes_pathname_prefix='/')
+
+TOP_N = 5
+colors = {'bg_text': '#332F2E', 'dropdown_border': '#767676', 'bg': '#ebf5f6'}
 
 territory_level_options = ('country', 'state', 'county')
 territory_options = {territory_level: get_territory_options(territory_level) for territory_level in territory_level_options}
@@ -117,17 +125,33 @@ app.layout = html.Div(children=[
                         'value': i
                     } for i in territory_level_options],
                     value='country',
-                    labelStyle={'display': 'inline-block', 'margin-right': 3},
-                    style={'margin-bottom': 20, 'display': 'inline-block'}
+                    style={'margin-bottom': 20, 'textAlign': 'center'}
                 ),
 
-                 dcc.Dropdown(
-                    id="territory_drop",
-                    multi=True,
-                    style={'border-color': colors['dropdown_border'], 'border-width': 3}
-                 )
+                html.Div([
+                    dcc.Dropdown(
+                        id="territory_drop",
+                        multi=True,
+                        style={'border-color': colors['dropdown_border'], 'border-width': 2}
+                    ),
+                    html.P(
+                        children='or',
+                        style={'padding-left': 9, 'padding-right': 9, 'position': 'relative', 'bottom': 5}
+                    ),
+                    html.Button(
+                        f'Show Top {TOP_N}', 'top_n_button',
+                        style={
+                            'height': '36px',
+                            'border-radius': 20,
+                            'padding-left': '30px',
+                            'padding-right': '30px'
+                        }
+                    )
+                ],
+                style={'display': 'flex', 'margin-left': '10px', 'margin-right': '70px'}
+                )
             ],
-            style={'margin-right': 50, 'border-width': 1, 'padding-bottom': 10, 'padding-left': 6, 'padding-right': 6}
+            style={'display': 'flex', 'flex-direction': 'column', 'padding-bottom': 10} # , 'width': '50%'}
             ),
 
             html.Div([
@@ -189,7 +213,7 @@ app.layout = html.Div(children=[
         style={'display': 'flex'}
         )
     ],
-    style={'backgroundColor': colors['bg'], 'padding-left': 60}),
+    style={'backgroundColor': colors['bg'], 'padding-left': 20}),
 
 
     dcc.Graph(
@@ -207,10 +231,13 @@ app.layout = html.Div(children=[
                 children='** Per capita is per 100k people'
             ),
             html.P(
-                children='*** 7 day moving average has been applied for all metrics'
+                children=f'*** Top {TOP_N} metric is calculated as locations with highest sum totals for selected metric during the selected time period'
             ),
             html.P(
-                children='**** Recovered metric is missing for the US for all levels'
+                children='**** 7 day moving average has been applied to all metrics'
+            ),
+            html.P(
+                children='***** Recovered metric is missing for the US for all levels'
             ),
         ],
         style={'textAlign': 'left', 'margin-left': 60, 'font-size': 14}
@@ -219,41 +246,70 @@ app.layout = html.Div(children=[
 ],
 )
 
+global prev_territory_level
+prev_territory_level = ''
+global prev_n_clicks
+prev_n_clicks = 0
 # ------------- Define App Interactivity ----------
 
 
-# territory_level value is input, the territory options is the output
-@app.callback(
+@app.callback([
     Output('territory_drop', 'options'),
+    Output('territory_drop', 'placeholder'),
+    Output('territory_drop', 'value')],
     Input('territory_level_radio', 'value'))
 def set_territory_options(territory_level):
-    return [{'label': i, 'value': i} for i in territory_options[territory_level]]
-
-
-# territory_level value is input, the territory dropdown placeholder text is output
-@app.callback(
-    Output('territory_drop', 'placeholder'),
-    Input('territory_level_radio', 'value'))
-def set_territory_placeholder(territory_level):
-    return f'Select {territory_level}(s)...'
+    """
+    territory_level value is input, the territory options is the output
+    """
+    global prev_territory_level
+    refresh_territory_level = dash.callback_context.triggered[0]['value']
+    #before updating options, wait until the page has been refreshed or the territory level has changed
+    if refresh_territory_level is None or prev_territory_level != territory_level:
+        prev_territory_level = territory_level
+        return [{'label': i, 'value': i} for i in territory_options[territory_level]], f'Select {territory_level}(s)...', None
 
 
 #creates graph based on all user inputs
 @app.callback(
     dash.dependencies.Output('graph', 'figure'),
-    [dash.dependencies.Input('territory_level_radio', 'value'), dash.dependencies.Input('territory_drop', 'value'), dash.dependencies.Input('metrics_radio', 'value'), dash.dependencies.Input('per_capita_radio', 'value'), dash.dependencies.Input('time_period_radio', 'value')])
-def update_graph(territory_level, territories, metric, per_capita_calc, time_period):
-    if territories:
+    [dash.dependencies.Input('territory_level_radio', 'value'), dash.dependencies.Input('territory_drop', 'value'), dash.dependencies.Input('metrics_radio', 'value'), dash.dependencies.Input('per_capita_radio', 'value'), dash.dependencies.Input('time_period_radio', 'value'), Input('top_n_button', 'n_clicks')])
+def update_graph(territory_level, territories, metric, per_capita_calc, time_period, n_clicks):
+
+    global prev_n_clicks
+    is_clicked = False
+    if n_clicks and n_clicks != prev_n_clicks:
+        is_clicked = True
+        territories = None
+        prev_n_clicks = n_clicks
+
+    if is_clicked or territories:
         traces = get_traces(territory_level, territories, metric, per_capita_calc, time_period)
 
         return {
             'data': traces,
             'layout':
-            go.Layout(title=f'{metric.upper()} ({per_capita_calc}) cases by day')
+            go.Layout(title=f'{metric.upper()} ({per_capita_calc}) by day for {time_period.upper()}')
         }
     else:
         raise dash.exceptions.PreventUpdate
 
 
+#run locally
 if __name__ == '__main__':
-    app.run_server()
+    app.run_server(debug=True)
+
+# run remotely
+else:
+    app.config.update({
+       'url_base_pathname': '/dev',
+       'routes_pathname_prefix': '',
+       'requests_pathname_prefix': '/dev/'
+   })
+    app.css.config.serve_locally = False
+    app.scripts.config.serve_locally = False
+
+    config = configparser.ConfigParser()
+    config.read('config/dash_app.cfg')
+    app.server.secret_key = config.get('ZAPPA', 'SECRET')
+    server = app.server

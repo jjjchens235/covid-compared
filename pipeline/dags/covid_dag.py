@@ -9,20 +9,6 @@ import re
 
 from scripts.covid_pandas import main
 
-'''
-import os
-os.environ['S3_BUCKET'] = env['S3_BUCKET']
-os.environ['REGION'] = env['REGION']
-
-os.environ['US_CONFIRMED'] = env['US_CONFIRMED']
-os.environ['GLOBAL_CONFIRMED'] = env['GLOBAL_CONFIRMED']
-os.environ['US_DEATHS'] = env['US_DEATHS']
-os.environ['GLOBAL_DEATHS'] = env['GLOBAL_DEATHS']
-os.environ['GLOBAL_RECOVERED'] = env['GLOBAL_RECOVERED']
-os.environ['LOCATION'] = env['LOCATION']
-
-aws = BaseHook.get_connection('aws_default')
-'''
 
 json_path = './dags/config/aws_config.json'
 with open(json_path) as file:
@@ -34,6 +20,7 @@ default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
     'start_date': datetime(2021, 1, 25),
+    'catchup': False,
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
     'email_on_retry': False,
@@ -102,12 +89,12 @@ def validate_bi_counts():
     Check that each bi table (county, state, country) has a distinct count that matches the upstream fact table
     '''
 
-    fact_county_q = 'SELECT count(distinct(combined_key)) FROM fact_metrics f join location l on f.location_id = l.location_id WHERE county is not null'
-    fact_state_q = 'SELECT count(distinct(combined_key)) FROM fact_metrics f join location l on f.location_id = l.location_id WHERE state is not null and county is null'
-    fact_country_q = 'SELECT count(distinct(combined_key)) FROM fact_metrics f join location l on f.location_id = l.location_id WHERE state is null and county is null'
-    bi_county_q = 'select count(distinct combined_key) FROM bi_county'
-    bi_state_q = 'select count(distinct combined_key) FROM bi_state'
-    bi_country_q = 'select count(distinct combined_key) FROM bi_country'
+    fact_county_q = 'SELECT count(distinct(combined_key)) FROM fact.fact_metrics f join dim.location l on f.location_id = l.location_id WHERE county is not null'
+    fact_state_q = 'SELECT count(distinct(combined_key)) FROM fact.fact_metrics f join dim.location l on f.location_id = l.location_id WHERE state is not null and county is null'
+    fact_country_q = 'SELECT count(distinct(combined_key)) FROM fact.fact_metrics f join dim.location l on f.location_id = l.location_id WHERE state is null and county is null'
+    bi_county_q = 'select count(distinct combined_key) FROM bi.bi_county'
+    bi_state_q = 'select count(distinct combined_key) FROM bi.bi_state'
+    bi_country_q = 'select count(distinct combined_key) FROM bi.bi_country'
 
     def get_diff(bi_table, fact_q, bi_q):
         with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
@@ -122,9 +109,9 @@ def validate_bi_counts():
             if diff != 0:
                 raise ValueError("Diff exceeeded threshhold")
 
-    get_diff('bi_county', fact_county_q, bi_county_q)
-    get_diff('bi_state', fact_state_q, bi_state_q)
-    get_diff('bi_country', fact_country_q, bi_country_q)
+    get_diff('bi.bi_county', fact_county_q, bi_county_q)
+    get_diff('bi.bi_state', fact_state_q, bi_state_q)
+    get_diff('bi.bi_country', fact_country_q, bi_country_q)
 
 
 def deprec_validate_bi_metrics(facts_table, bi_table_type):
@@ -162,18 +149,19 @@ load_to_s3 = PythonOperator(
     op_args=[env['AWS']['LOGIN'], env['AWS']['PW'], 's3://' + env['S3']['BUCKET'] + '/']
 )
 
+# fyi .sql cannot be passed in as args bc of sqlpython operator templating
 drop_existing = SQLTemplatedPythonOperator(
     task_id='drop_existing',
     dag=dag,
     python_callable=drop_tables,
-    op_args=['./dags/sql/drop_tables']
+    op_args=['./dags/sql/01_drop_existing']
 )
 
 create_tables = PostgresOperator(
     task_id='create_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/create_tables.sql'
+    sql='/sql/02_create_tables.sql'
 )
 
 
@@ -181,7 +169,7 @@ stage_tables = PostgresOperator(
     task_id='stage_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/stage_tables.sql',
+    sql='/sql/03_stage_tables.sql',
     params={
         's3_bucket': env['S3']['BUCKET'],
         'region': env['S3']['REGION'],
@@ -198,49 +186,49 @@ load_dim_tables = PostgresOperator(
     task_id='load_dim_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/load_dim_tables.sql'
+    sql='/sql/04_load_dim_tables.sql'
 )
 
 load_temp_fact_tables = PostgresOperator(
     task_id='load_temp_fact_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/load_temp_fact_tables.sql'
+    sql='/sql/05_load_temp_fact_tables.sql'
 )
 
-load_fact_table = PostgresOperator(
-    task_id='load_fact_table',
+load_fact_tables = PostgresOperator(
+    task_id='load_fact_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/load_fact_table.sql'
+    sql='/sql/06_load_fact_tables.sql'
 )
 
 validate_fact_confirmed = PythonOperator(
     task_id='validate_fact_confirmed',
     dag=dag,
     python_callable=validate_fact_metric,
-    op_args=[['staging_global_confirmed', 'staging_us_confirmed'], 'fact_metrics', 'confirmed']
+    op_args=[['staging.staging_global_confirmed', 'staging.staging_us_confirmed'], 'fact.fact_metrics', 'confirmed']
 )
 
 validate_fact_deaths = PythonOperator(
     task_id='validate_fact_deaths',
     dag=dag,
     python_callable=validate_fact_metric,
-    op_args=[['staging_global_deaths', 'staging_us_deaths'], 'fact_metrics', 'deaths']
+    op_args=[['staging.staging_global_deaths', 'staging.staging_us_deaths'], 'fact.fact_metrics', 'deaths']
 )
 
 validate_fact_recovered = PythonOperator(
     task_id='validate_fact_recovered',
     dag=dag,
     python_callable=validate_fact_metric,
-    op_args=[['staging_global_recovered'], 'fact_metrics', 'recovered']
+    op_args=[['staging.staging_global_recovered'], 'fact.fact_metrics', 'recovered']
 )
 
 load_bi_tables = PostgresOperator(
     task_id='load_bi_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/bi_tables_atomic.sql'
+    sql='/sql/07_bi_tables_atomic.sql'
 )
 
 
@@ -254,10 +242,9 @@ drop_staging = SQLTemplatedPythonOperator(
     task_id='drop_staging',
     dag=dag,
     python_callable=drop_tables,
-    op_args=['./dags/sql/drop_staging_tables']
+    op_args=['./dags/sql/08_drop_staging_tables']
 )
 
 
-#[drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
-load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
-#[load_to_s3, drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
+load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
+#[load_to_s3, drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
