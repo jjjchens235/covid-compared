@@ -3,6 +3,7 @@ from dash.dependencies import Input, Output
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
+import configparser
 
 from rds_db import query_rds
 
@@ -79,9 +80,11 @@ def get_territory_options(territory_level):
 
 
 app = dash.Dash(__name__, requests_pathname_prefix='/dev/')
-app.server.secret_key = 'QXcky1VpHvS1O7vvPPD691IXFLY3yFp6gjqdak6s'
+config = configparser.ConfigParser()
+config.read('config/dash_app.cfg')
+app.server.secret_key = config.get('ZAPPA', 'SECRET')
 server = app.server
-colors = {'bg': '#332F2E', 'dropdown_border': '#99E6FF'}
+colors = {'bg_text': '#332F2E', 'dropdown_border': '#99E6FF', 'bg': '#ebf5f6'}
 
 territory_level_options = ('country', 'state', 'county')
 territory_options = {territory_level: get_territory_options(territory_level) for territory_level in territory_level_options}
@@ -95,7 +98,7 @@ app.layout = html.Div(children=[
         children='covid-19 Case Comparison By Location',
         style={
             'textAlign': 'center',
-            'color': colors['bg']
+            'color': colors['bg_text']
         }
     ),
 
@@ -186,7 +189,7 @@ app.layout = html.Div(children=[
         style={'display': 'flex'}
         )
     ],
-    style={'backgroundColor': '#ebf5f6', 'padding-left': 60}),
+    style={'backgroundColor': colors['bg'], 'padding-left': 60}),
 
 
     dcc.Graph(

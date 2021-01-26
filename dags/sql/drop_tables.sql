@@ -20,6 +20,3 @@ DROP TABLE IF EXISTS recovered_temp;
 DROP TABLE IF EXISTS fact_metrics;
 DROP TABLE IF EXISTS fact_metrics_moving_avg;
 
-DROP TABLE IF EXISTS bi_county;
-DROP TABLE IF EXISTS bi_state;
-DROP TABLE IF EXISTS bi_country;

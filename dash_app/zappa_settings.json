@@ -3,7 +3,7 @@
         "app_function": "app_dash.server",
         "aws_region": "us-west-1",
         "profile_name": "zappa",
-        "project_name": "rds-dash",
+        "project_name": "dash-app",
         "runtime": "python3.8",
         "s3_bucket": "zappa-dash-covid"
     }

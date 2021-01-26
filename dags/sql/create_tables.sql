@@ -1,7 +1,11 @@
 
+CREATE SCHEMA staging;
+CREATE SCHEMA temp;
+CREATE SCHEMA dim;
+CREATE SCHEMA fact;
 
 -- Staging tables ----
-CREATE TABLE IF NOT EXISTS staging_us_confirmed(
+CREATE TABLE IF NOT EXISTS staging.staging_us_confirmed(
 				country varchar,
 				state varchar,
 				county varchar,
@@ -10,7 +14,7 @@ CREATE TABLE IF NOT EXISTS staging_us_confirmed(
 );
 
 
-CREATE TABLE IF NOT EXISTS staging_global_confirmed(
+CREATE TABLE IF NOT EXISTS staging.staging_global_confirmed(
 				country varchar,
 				state varchar,
 				dt date,
@@ -18,7 +22,7 @@ CREATE TABLE IF NOT EXISTS staging_global_confirmed(
 );
 
 
-CREATE TABLE IF NOT EXISTS staging_us_deaths(
+CREATE TABLE IF NOT EXISTS staging.staging_us_deaths(
 				country varchar,
 				state varchar,
 				county varchar,
@@ -28,21 +32,21 @@ CREATE TABLE IF NOT EXISTS staging_us_deaths(
 
 
 
-CREATE TABLE IF NOT EXISTS staging_global_deaths(
+CREATE TABLE IF NOT EXISTS staging.staging_global_deaths(
 				country varchar,
 				state varchar,
 				dt date,
 				deaths float
 );
 
-CREATE TABLE IF NOT EXISTS staging_global_recovered(
+CREATE TABLE IF NOT EXISTS staging.staging_global_recovered(
 				country varchar,
 				state varchar,
 				dt date,
 				recovered float
 );
 
-CREATE TABLE IF NOT EXISTS staging_location(
+CREATE TABLE IF NOT EXISTS staging.staging_location(
 				location_id int,
 				country varchar,
 				state varchar,
@@ -55,7 +59,7 @@ CREATE TABLE IF NOT EXISTS staging_location(
 );
 -- ---------------- DiM TABLES -------------
 
-CREATE TABLE IF NOT EXISTS location(
+CREATE TABLE IF NOT EXISTS dim.location(
 				location_id int PRIMARY KEY,
 				country varchar,
 				state varchar,
@@ -64,20 +68,20 @@ CREATE TABLE IF NOT EXISTS location(
 				combined_key varchar
 );
 
-CREATE TABLE IF NOT EXISTS iso2(
+CREATE TABLE IF NOT EXISTS dim.iso2(
 				iso2_id	SERIAL PRIMARY KEY,
 				iso2 varchar,
 				location_id int
 );
 
-CREATE TABLE IF NOT EXISTS lat_lon(
+CREATE TABLE IF NOT EXISTS dim.lat_lon(
 				lat_lon_id	SERIAL PRIMARY KEY,
 				lat varchar,
 				lon varchar,
 				location_id int
 );
 
-CREATE TABLE IF NOT EXISTS time(
+CREATE TABLE IF NOT EXISTS dim.time(
 				dt date PRIMARY KEY,
 				year int,
 				month int,
@@ -88,19 +92,19 @@ CREATE TABLE IF NOT EXISTS time(
 -- ---------------- TEMP FACT TABLE -------------
 -- ----- get foreign keys for our intermediate fact tables
 
-CREATE TABLE IF NOT EXISTS confirmed_temp(
+CREATE TABLE IF NOT EXISTS temp.confirmed_temp(
 				location_id int,
 				dt date,
 				confirmed int
 );
 
-CREATE TABLE IF NOT EXISTS deaths_temp(
+CREATE TABLE IF NOT EXISTS temp.deaths_temp(
 				location_id int,
 				dt date,
 				deaths int
 );
 
-CREATE TABLE IF NOT EXISTS recovered_temp(
+CREATE TABLE IF NOT EXISTS temp.recovered_temp(
 				location_id int,
 				dt date,
 				recovered int
@@ -109,7 +113,7 @@ CREATE TABLE IF NOT EXISTS recovered_temp(
 
 -- ---------------- FACT TABLE -------------
 
-CREATE TABLE if NOT EXISTS fact_metrics (
+CREATE TABLE if NOT EXISTS fact.fact_metrics (
 		location_id int,
 		dt date,
 		confirmed int,
@@ -118,7 +122,7 @@ CREATE TABLE if NOT EXISTS fact_metrics (
 		PRIMARY KEY(location_id, dt)
 );
 
-CREATE TABLE if NOT EXISTS fact_metrics_moving_avg (
+CREATE TABLE if NOT EXISTS fact.fact_metrics_moving_avg (
 		location_id int,
 		dt date,
 		confirmed float,
@@ -128,47 +132,3 @@ CREATE TABLE if NOT EXISTS fact_metrics_moving_avg (
 );
 
 
-------- BI Tables -----
-CREATE TABLE if NOT EXISTS bi_county (
-	combined_key varchar,
-	country varchar,
-	state varchar,
-	county varchar,
-	population int,
-	dt date,
-	confirmed int,
-	deaths int,
-	recovered int,
-	confirmed_per_capita numeric,
-	deaths_per_capita numeric,
-	recovered_per_capita numeric,
-	PRIMARY KEY(combined_key, dt)
-);
-
-CREATE TABLE if NOT EXISTS bi_state (
-	combined_key varchar,
-	country varchar,
-	state varchar,
-	population int,
-	dt date,
-	confirmed int,
-	deaths int,
-	recovered int,
-	confirmed_per_capita numeric,
-	deaths_per_capita numeric,
-	recovered_per_capita numeric,
-	PRIMARY KEY(combined_key, dt)
-);
-
-CREATE TABLE if NOT EXISTS bi_country (
-	combined_key varchar,
-	population int,
-	dt date,
-	confirmed int,
-	deaths int,
-	recovered int,
-	confirmed_per_capita numeric,
-	deaths_per_capita numeric,
-	recovered_per_capita numeric,
-	PRIMARY KEY(combined_key, dt)
-);
