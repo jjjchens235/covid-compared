@@ -33,7 +33,7 @@ rds = BaseHook.get_connection('rds')
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
-    'start_date': datetime(2021, 1, 24),
+    'start_date': datetime(2021, 1, 25),
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
     'email_on_retry': False,
@@ -41,7 +41,7 @@ default_args = {
     'retry_delay': timedelta(minutes=1),
 }
 
-dag = DAG('covid2', default_args=default_args, schedule_interval='10 17 * * *')
+dag = DAG('covid3', default_args=default_args, schedule_interval='0 13 * * *')
 
 
 class SQLTemplatedPythonOperator(PythonOperator):
@@ -236,11 +236,11 @@ validate_fact_recovered = PythonOperator(
     op_args=[['staging_global_recovered'], 'fact_metrics', 'recovered']
 )
 
-load_bi_county = PostgresOperator(
+load_bi_tables = PostgresOperator(
     task_id='load_bi_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/load_bi_tables.sql'
+    sql='/sql/bi_tables_atomic.sql'
 )
 
 
@@ -250,14 +250,14 @@ validate_bi_counts = PythonOperator(
     python_callable=validate_bi_counts
 )
 
-drop_temp = SQLTemplatedPythonOperator(
-    task_id='drop_temp',
+drop_staging = SQLTemplatedPythonOperator(
+    task_id='drop_staging',
     dag=dag,
     python_callable=drop_tables,
-    op_args=['./dags/sql/drop_temp_tables']
+    op_args=['./dags/sql/drop_staging_tables']
 )
 
 
-#[drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp
-load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp
-#[load_to_s3, drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_county >> validate_bi_counts >> drop_temp
+#[drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
+load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
+#[load_to_s3, drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_table >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
