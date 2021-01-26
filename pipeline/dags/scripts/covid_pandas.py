@@ -43,7 +43,7 @@ class CovidData:
 
     def add_levels(self):
         '''
-        Update inconsistent territory levels. For example, China is only by country/state, while France is by both country/state and country only. This means that summing up all the states to get China's total would mean inadvertently double counting France.
+        Update inconsistent territory levels. For example, China is only by country/state, while France is by both country/state and country only. This means that summing up all the states to get each country's total, i.e. China would also mean inadvertently double counting France.
 
         To fix, this creates a seperate line for each missing level, i.e. create a country line for China
         '''
@@ -63,9 +63,11 @@ class CovidData:
                 if not rolled.empty:
                     DF.df = pd.concat([df, rolled], axis=0)
 
-    def rename_all(self):
+    def clean_time_series(self):
         for DF in self.DFs:
-            DF.df.rename(columns=self.cols_to_rename, inplace=True)
+            df = DF.df
+            df.rename(columns=self.cols_to_rename, inplace=True)
+            df.loc[df['country'] == 'US', 'country'] = 'United States'
 
     def merge_missing_locations(self):
         '''
@@ -85,15 +87,18 @@ class CovidData:
         #create a 6 digit unique id, that's the smallest UID not used in the original location table
         df_missing['location_id'] = df_missing.groupby('combined_key')['combined_key'].transform(lambda x: randint(100000, 999999))
         #default 100k
-        df_missing['Population'] = 100000
+        df_missing['Population'] = np.nan
         df_missing = df_missing[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon', 'combined_key']]
         self.location.df = pd.concat([self.location.df, df_missing], axis=0)
 
     def clean_location(self):
-        self.location.df = self.location.df.rename(columns=self.cols_to_rename)
-        self.location.df = self.location.df[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon']]
+        df = self.location.df
+        df = df.rename(columns=self.cols_to_rename)
+        df = df[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon']]
+        df.loc[df['country'] == 'US', 'country'] = 'United States'
         #have to manually recreate combined_key field since original field isnt consistently formatted
-        self.location.df['combined_key'] = (self.location.df['county'] + ', ').fillna('') + (self.location.df['state'] + ', ').fillna('') + self.location.df['country']
+        df['combined_key'] = (df['county'] + ', ').fillna('') + (df['state'] + ', ').fillna('') + df['country']
+        self.location.df = df
         self.merge_missing_locations()
 
     def save_csv(self, df, path, title, aws_key=None, aws_secret=None):
@@ -152,7 +157,7 @@ class CovidData:
 
 def main(aws_key, aws_secret, bucket):
     covid = CovidData()
-    covid.rename_all()
+    covid.clean_time_series()
     print(covid.us_confirmed.df.head())
     covid.clean_location()
     covid.melt_dfs()
