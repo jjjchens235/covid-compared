@@ -1,3 +1,6 @@
+"""
+Queries AWS RDS database and returns the result as a pandas dataframe, to be used by Dash.
+"""
 import psycopg2
 import configparser
 import pandas as pd
@@ -17,9 +20,9 @@ def query_rds(query, is_tmp_file=True):
 
 
 def query_tmp_file(query, conn):
-    '''
+    """
     slightly better performance than native pd.read_sql
-    '''
+    """
     with tempfile.TemporaryFile() as tmpfile:
         copy_sql = "COPY ({query}) TO STDOUT WITH CSV {head}".format(query=query, head="HEADER")
         cur = conn.cursor()

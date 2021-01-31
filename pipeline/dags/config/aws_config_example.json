@@ -1,0 +1,17 @@
+
+{
+	"AWS":{
+		"LOGIN":"",
+		"PW":""
+	},
+	 "S3":{
+			"BUCKET":"",
+			"REGION":"",
+			"US_CONFIRMED":"us_confirmed_diff.csv",
+			"GLOBAL_CONFIRMED":"global_confirmed_diff.csv",
+			"US_DEATHS":"us_deaths_diff.csv",
+			"GLOBAL_DEATHS":"global_deaths_diff.csv",
+			"GLOBAL_RECOVERED":"global_recovered_diff.csv",
+			"LOCATION":"location_diff.csv"
+	 }
+}

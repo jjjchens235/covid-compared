@@ -1,5 +1,7 @@
+-- Testing combining multiple metrics from differnet tables into one table
 
-db_fiddle_url = 'https://www.db-fiddle.com/f/hRZGF5beVzoKPvNGm8wcGr/2'
+
+--db_fiddle_url = 'https://www.db-fiddle.com/f/hRZGF5beVzoKPvNGm8wcGr/2'
 
 #confirmed
 create table us_confirmed (dt date, country varchar(10), state varchar(20), county varchar(100), confirmed int);
