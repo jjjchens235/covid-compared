@@ -1,11 +1,21 @@
 
--- fact_metrics_insert
-INSERT INTO fact.fact_metrics (location_id, dt, confirmed, deaths, recovered)
-SELECT COALESCE(d.location_id, c.location_id, r.location_id) location_id, COALESCE(d.dt, c.dt, r.dt) dt, COALESCE(c.confirmed, 0) confirmed, COALESCE(d.deaths, 0) deaths, COALESCE(r.recovered, 0) recovered
-FROM temp.confirmed_temp c
-FULL OUTER JOIN temp.deaths_temp d on d.location_id = c.location_id and d.dt = c.dt
-FULL OUTER JOIN temp.recovered_temp r on r.location_id = c.location_id and r.dt = c.dt;
+-- fact_metrics insert
 
+INSERT INTO fact.fact_metrics (location_id, dt, confirmed, deaths, recovered)
+SELECT COALESCE(d.location_id, c.location_id, r.location_id) location_id,
+			 COALESCE(d.dt, c.dt, r.dt) dt,
+			 COALESCE(c.confirmed, 0) confirmed,
+			 COALESCE(d.deaths, 0) deaths,
+			 COALESCE(r.recovered, 0) recovered
+FROM temp.confirmed_temp c
+FULL OUTER JOIN temp.deaths_temp d
+	ON d.location_id = c.location_id
+	AND d.dt = c.dt
+FULL OUTER JOIN temp.recovered_temp r
+	ON r.location_id = c.location_id
+	AND r.dt = c.dt;
+
+-- fact_metrics_moving_avg insert
 
 INSERT INTO fact.fact_metrics_moving_avg (location_id, dt, confirmed, deaths, recovered)
 SELECT * FROM 

@@ -15,7 +15,6 @@ with open(json_path) as file:
     env = json.load(file)
 rds = BaseHook.get_connection('rds')
 
-# Following are defaults which can be overridden later on
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
@@ -27,7 +26,6 @@ default_args = {
     'retries': 0,
     'retry_delay': timedelta(minutes=1),
 }
-
 dag = DAG('covid3', default_args=default_args, schedule_interval='0 13 * * *')
 
 
@@ -37,10 +35,10 @@ class SQLTemplatedPythonOperator(PythonOperator):
 
 
 def drop_tables(sql_path):
+    """Run each of the DROP queries in the argument file"""
     sql_path = sql_path + '.sql'
     with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
         cur = conn.cursor()
-        print(f'hello world: {sql_path}')
         with open(sql_path, 'r') as fd:
             sqlfile = fd.read()
             sql_commands = sqlfile.split(';')
@@ -48,27 +46,27 @@ def drop_tables(sql_path):
                 query_sub = re.sub('\n', '', query)
                 if query_sub:
                     query_sub = query_sub + ';'
-                    print(query_sub)
+                    #print(query_sub)
                     cur.execute(query)
                     conn.commit()
 
 
 def validate_fact_metric(upstream_tables, fact_table, metric):
-    #for each upstream table (staging us/staging global), we want to get increment the sumof the upstream total
-    #Then we compare it against the fact table metric
+    """
+    Validates the chosen metric (confirmed, deaths, or recovered) by comparing the fact table metric against the upstream staging tables, to ensure the sum of the metric has not changed downstream
+
+    upstream_tables -- The US and global staging table for the chosen metric.
+
+    fact_table -- The final derived fact table.
+
+    metric -- The metric to compare.
+    """
     with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
         cur = conn.cursor()
-
         upstream_sum = 0
-        fact_sum = 0
         # get the sum of the upstream staging tables
         for upstream_table in upstream_tables:
-            #recovered query
-            if metric == 'recovered':
-                query = f"SELECT SUM({metric}) FROM {upstream_table} WHERE country <> 'Canada'"
-            #confirmed/deaths query
-            else:
-                query = f"SELECT SUM({metric}) FROM {upstream_table}"
+            query = f"SELECT SUM({metric}) FROM {upstream_table}"
             cur.execute(query)
             upstream_sum += cur.fetchone()[0]
 
@@ -79,22 +77,21 @@ def validate_fact_metric(upstream_tables, fact_table, metric):
 
     diff = abs(upstream_sum - fact_sum)
     print(f"For {metric} metric...\nupstream sum: {upstream_sum}\nfact_sum: {fact_sum}\nDiff: {diff}")
-    # check that the sums of fact vs downstream are close
     if diff > 5:
         raise ValueError("Diff exceeeded threshhold")
 
 
 def validate_bi_counts():
-    '''
+    """
     Check that each bi table (county, state, country) has a distinct count that matches the upstream fact table
-    '''
+    """
 
-    fact_county_q = 'SELECT count(distinct(combined_key)) FROM fact.fact_metrics f join dim.location l on f.location_id = l.location_id WHERE county is not null'
-    fact_state_q = 'SELECT count(distinct(combined_key)) FROM fact.fact_metrics f join dim.location l on f.location_id = l.location_id WHERE state is not null and county is null'
-    fact_country_q = 'SELECT count(distinct(combined_key)) FROM fact.fact_metrics f join dim.location l on f.location_id = l.location_id WHERE state is null and county is null'
-    bi_county_q = 'select count(distinct combined_key) FROM bi.bi_county'
-    bi_state_q = 'select count(distinct combined_key) FROM bi.bi_state'
-    bi_country_q = 'select count(distinct combined_key) FROM bi.bi_country'
+    fact_county_q = 'SELECT COUNT(DISTINCT(combined_key)) FROM fact.fact_metrics f JOIN dim.location l on f.location_id = l.location_id WHERE county IS NOT NULL'
+    fact_state_q = 'SELECT COUNT(DISTINCT(combined_key)) FROM fact.fact_metrics f JOIN dim.location l on f.location_id = l.location_id WHERE state IS NOT NULL and county is null'
+    fact_country_q = 'SELECT COUNT(DISTINCT(combined_key)) FROM fact.fact_metrics f JOIN dim.location l on f.location_id = l.location_id WHERE state is null and county is null'
+    bi_county_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_county'
+    bi_state_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_state'
+    bi_country_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_country'
 
     def get_diff(bi_table, fact_q, bi_q):
         with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
@@ -114,34 +111,7 @@ def validate_bi_counts():
     get_diff('bi.bi_country', fact_country_q, bi_country_q)
 
 
-def deprec_validate_bi_metrics(facts_table, bi_table_type):
-    '''
-    Check that all the bi tables metrics match upstream
-    facts table metrics
-    @parameter bi_table_type: county, state, or country
-    @facts_table: name of the facts_table to select from
-    '''
-    metrics = ('confirmed', 'deaths', 'recovered')
-    with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
-        cur = conn.cursor()
-
-        facts_cond = f"WHERE {bi_table_type} is NOT NULL"
-        for metric in metrics:
-            facts_query = f"SELECT SUM({metric}) FROM {facts_table} join location l on {facts_table}.location_id = l.location_id {facts_cond}"
-            cur.execute(facts_query)
-            facts_sum = cur.fetchone()[0]
-
-            current_query = f"SELECT SUM({metric}) FROM bi_{bi_table_type}"
-            cur.execute(current_query)
-            current_sum = cur.fetchone()[0]
-
-            diff = abs(facts_sum - current_sum)
-            # check that the sums of fact vs downstream are close
-            if diff > 5:
-                print(f"For {metric} metric...\nfacts sum: {facts_sum}\nbi_sum: {current_sum}\nDiff: {diff}")
-                raise ValueError("Diff exceeeded threshhold")
-
-
+#pandas script that moves data in github to S3 csv file
 load_to_s3 = PythonOperator(
     task_id='data_to_s3',
     dag=dag,
@@ -149,7 +119,7 @@ load_to_s3 = PythonOperator(
     op_args=[env['AWS']['LOGIN'], env['AWS']['PW'], 's3://' + env['S3']['BUCKET'] + '/']
 )
 
-# fyi .sql cannot be passed in as args bc of sqlpython operator templating
+# fyi .sql extension cannot be passed in as args bc of sqlpython operator templating
 drop_existing = SQLTemplatedPythonOperator(
     task_id='drop_existing',
     dag=dag,
@@ -224,11 +194,17 @@ validate_fact_recovered = PythonOperator(
     op_args=[['staging.staging_global_recovered'], 'fact.fact_metrics', 'recovered']
 )
 
+#population thresh is based off of median (50th percentile) populations for respective location level
 load_bi_tables = PostgresOperator(
     task_id='load_bi_tables',
     dag=dag,
     postgres_conn_id='rds',
-    sql='/sql/07_bi_tables_atomic.sql'
+    sql='/sql/07_bi_tables_atomic.sql',
+    params={
+        'county_thresh': 26000,
+        'state_thresh': 1800000,
+        'country_thresh': 9000000
+    }
 )
 
 
@@ -247,4 +223,3 @@ drop_staging = SQLTemplatedPythonOperator(
 
 
 load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
-#[load_to_s3, drop_existing >> create_tables] >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging

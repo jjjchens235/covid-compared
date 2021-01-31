@@ -26,9 +26,6 @@ SELECT aws_s3.table_import_from_s3(
 	 aws_commons.create_s3_uri( '{{ params.s3_bucket }}', '{{ params.us_deaths }}', '{{ params.region }}' )
 );
 
-
-
-
 --staging_global_deaths_copy
 SELECT aws_s3.table_import_from_s3(
 	 'staging.staging_global_deaths',
@@ -36,8 +33,6 @@ SELECT aws_s3.table_import_from_s3(
 	 '(FORMAT csv, DELIMITER E''\t'', HEADER true)',
 	 aws_commons.create_s3_uri( '{{ params.s3_bucket }}', '{{ params.global_deaths }}', '{{ params.region }}' )
 );
-
-
 
 -- staging_global_recovered_copy
 SELECT aws_s3.table_import_from_s3(

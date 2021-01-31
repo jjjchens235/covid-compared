@@ -39,12 +39,14 @@ CREATE TABLE IF NOT EXISTS staging.staging_global_deaths(
 				deaths float
 );
 
+
 CREATE TABLE IF NOT EXISTS staging.staging_global_recovered(
 				country varchar,
 				state varchar,
 				dt date,
 				recovered float
 );
+
 
 CREATE TABLE IF NOT EXISTS staging.staging_location(
 				location_id int,
@@ -68,11 +70,13 @@ CREATE TABLE IF NOT EXISTS dim.location(
 				combined_key varchar
 );
 
+
 CREATE TABLE IF NOT EXISTS dim.iso2(
 				iso2_id	SERIAL PRIMARY KEY,
 				iso2 varchar,
 				location_id int
 );
+
 
 CREATE TABLE IF NOT EXISTS dim.lat_lon(
 				lat_lon_id	SERIAL PRIMARY KEY,
@@ -80,6 +84,7 @@ CREATE TABLE IF NOT EXISTS dim.lat_lon(
 				lon varchar,
 				location_id int
 );
+
 
 CREATE TABLE IF NOT EXISTS dim.time(
 				dt date PRIMARY KEY,
@@ -98,18 +103,19 @@ CREATE TABLE IF NOT EXISTS temp.confirmed_temp(
 				confirmed int
 );
 
+
 CREATE TABLE IF NOT EXISTS temp.deaths_temp(
 				location_id int,
 				dt date,
 				deaths int
 );
 
+
 CREATE TABLE IF NOT EXISTS temp.recovered_temp(
 				location_id int,
 				dt date,
 				recovered int
 );
-
 
 -- ---------------- FACT TABLE -------------
 
@@ -121,6 +127,7 @@ CREATE TABLE if NOT EXISTS fact.fact_metrics (
 		recovered int,
 		PRIMARY KEY(location_id, dt)
 );
+
 
 CREATE TABLE if NOT EXISTS fact.fact_metrics_moving_avg (
 		location_id int,
