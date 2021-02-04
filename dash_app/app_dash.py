@@ -32,14 +32,19 @@ def __query_highest(territory_level, metric, cond_date):
     # the 'WHERE TRUE' does not effect the query, but makes the 'cond_date' more easily template-able
     query = f"""
      JOIN
-        (SELECT combined_key, SUM({metric}) total
+        (SELECT location_id, SUM({metric}) total
         FROM bi.bi_{territory_level}_top
         WHERE TRUE {cond_date}
-        GROUP BY combined_key
+        GROUP BY location_id
         ORDER BY total DESC LIMIT 5) tmp
-    on bi.combined_key = tmp.combined_key
+    on bi.location_id = tmp.location_id
     """
     return query
+
+
+def __query_location_ids(territories):
+
+    return f"WHERE location_id IN (SELECT DISTINCT location_id FROM dim.location {__query_territories(territories)})"
 
 
 def __query_date(time_period):
@@ -76,7 +81,7 @@ def __generate_query(territory_level, territories, metric, per_capita_calc, time
 
     #user selected specific territories
     else:
-        cond_territory = __query_territories(territories)
+        cond_territory = __query_location_ids(territories)
         order_by = "ORDER BY dt"
         top = ''
 
@@ -307,7 +312,7 @@ app.layout = html.Div(children=[
             ),
         ],
         #style for all informational text
-        style={'textAlign': 'left', 'margin-left': 60, 'font-size': 14}
+        style={'textAlign': 'left', 'margin-left': 60, 'font-size': '.8em'}
     )
 ],
 )
@@ -420,11 +425,9 @@ if __name__ == '__main__':
 else:
     # Prefix is necessary for Dash to render correclty on Lambda API Gateway, but not necessary for custom domain using Route 53
     # more details here: https://github.com/Miserlou/Zappa/issues/2200#issuecomment-772702958
-    '''
     app.config.update({
        'requests_pathname_prefix': '/dev/'
-   })
-   '''
+    })
 
     config = configparser.ConfigParser()
     config.read('config/dash_app.cfg')

@@ -7,6 +7,7 @@ BEGIN;
 CREATE SCHEMA IF NOT EXISTS bi;
 
 CREATE TABLE if NOT EXISTS bi.bi_county_new (
+	location_id int,
 	combined_key varchar,
 	country varchar,
 	state varchar,
@@ -19,10 +20,11 @@ CREATE TABLE if NOT EXISTS bi.bi_county_new (
 	confirmed_per_capita numeric,
 	deaths_per_capita numeric,
 	recovered_per_capita numeric,
-	PRIMARY KEY(combined_key, dt)
+	PRIMARY KEY(location_id, dt)
 );
 
 CREATE TABLE if NOT EXISTS bi.bi_state_new (
+	location_id int,
 	combined_key varchar,
 	country varchar,
 	state varchar,
@@ -34,10 +36,11 @@ CREATE TABLE if NOT EXISTS bi.bi_state_new (
 	confirmed_per_capita numeric,
 	deaths_per_capita numeric,
 	recovered_per_capita numeric,
-	PRIMARY KEY(combined_key, dt)
+	PRIMARY KEY(location_id, dt)
 );
 
 CREATE TABLE if NOT EXISTS bi.bi_country_new (
+	location_id int,
 	combined_key varchar,
 	population int,
 	dt date,
@@ -47,7 +50,7 @@ CREATE TABLE if NOT EXISTS bi.bi_country_new (
 	confirmed_per_capita numeric,
 	deaths_per_capita numeric,
 	recovered_per_capita numeric,
-	PRIMARY KEY(combined_key, dt)
+	PRIMARY KEY(location_id, dt)
 );
 
 
@@ -55,8 +58,9 @@ CREATE TABLE if NOT EXISTS bi.bi_country_new (
  
  -- county
 
-INSERT INTO bi.bi_county_new (combined_key, country, state, county, population, dt, confirmed, deaths, recovered, confirmed_per_capita, deaths_per_capita, recovered_per_capita)
-SELECT combined_key,
+INSERT INTO bi.bi_county_new (location_id, combined_key, country, state, county, population, dt, confirmed, deaths, recovered, confirmed_per_capita, deaths_per_capita, recovered_per_capita)
+SELECT l.location_id,
+			 combined_key,
 			 country,
 			 state,
 			 county,
@@ -75,9 +79,10 @@ JOIN dim.location l
 	
  -- state
 
-INSERT INTO bi.bi_state_new (combined_key, country, state, population, dt, confirmed, deaths, recovered, confirmed_per_capita, deaths_per_capita, recovered_per_capita) -- need to group by since US states are by county
+INSERT INTO bi.bi_state_new (location_id, combined_key, country, state, population, dt, confirmed, deaths, recovered, confirmed_per_capita, deaths_per_capita, recovered_per_capita) -- need to group by since US states are by county
 
-	SELECT combined_key,
+	SELECT l.location_id, 
+				 combined_key,
 				 country,
 				 state,
 				 population,
@@ -96,9 +101,10 @@ JOIN dim.location l
 
 -- country
 
-	INSERT INTO bi.bi_country_new (combined_key, population, dt, confirmed, deaths, recovered, confirmed_per_capita, deaths_per_capita, recovered_per_capita) -- need to group by since US states are by county
+INSERT INTO bi.bi_country_new (location_id, combined_key, population, dt, confirmed, deaths, recovered, confirmed_per_capita, deaths_per_capita, recovered_per_capita) -- need to group by since US states are by county
 
-	SELECT combined_key,
+SELECT l.location_id,
+				 combined_key,
 				 population,
 				 dt,
 				 confirmed,
