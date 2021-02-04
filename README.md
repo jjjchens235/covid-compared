@@ -2,7 +2,7 @@
  <h3 align="center">Data Engineering: COVID19 Comparison Dashboard</h3>
 <p align="center">
 	A covid location comparison 
-	<a href="hbslm6k5w4.execute-api.us-west-1.amazonaws.com/dev">dashboard</a>
+	<a href="https://dashboard.covid19compared.com/">dashboard</a>
 	supported through an automated data pipeline.
 </p>
 
@@ -46,8 +46,7 @@
 
 The main purpose of this project is to create an end to end automated data pipeline that will allow the end user to be able to easily query on three different covid fact metrics - confirmed, deaths, and recovered- across a number of different dimensions such as location and time. 
 
-In order to showcase my work, I have also created a live covid dashboard that allows for regional comparisons across the aforementioned metrics, you can access it [here](hbslm6k5w4.execute-api.us-west-1.amazonaws.com/dev).
-TODO: update the link to either prd or covid19compared.com
+In order to showcase my work, I have also created a live covid dashboard that allows for regional comparisons across the aforementioned metrics, you can access it [here](https://dashboard.covid19compared.com).
 
 ### Built With
 * [AWS RDS](https://aws.amazon.com/rds/)

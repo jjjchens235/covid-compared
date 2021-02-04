@@ -156,7 +156,7 @@ colors = {'bg_text': '#332F2E', 'bg': '#ebf5f6', 'dropdown_border': '#767676'}
 app.layout = html.Div(children=[
     # Main title of the page
     html.H1(
-        children='covid-19 Case Comparison By Location',
+        children='COVID-19 Case Comparison By Location',
         style={
             'textAlign': 'center',
             'color': colors['bg_text']
@@ -389,6 +389,9 @@ def update_graph(territory_level, territories, metric, per_capita_calc, time_per
     """
 
     global prev_n_clicks
+    #reset prev_n_clicks on refresh
+    if n_clicks is None:
+        prev_n_clicks = 0
     is_clicked = False
     if n_clicks and n_clicks != prev_n_clicks:
         is_clicked = True
@@ -415,11 +418,13 @@ if __name__ == '__main__':
 
 # run server
 else:
+    # Prefix is necessary for Dash to render correclty on Lambda API Gateway, but not necessary for custom domain using Route 53
+    # more details here: https://github.com/Miserlou/Zappa/issues/2200#issuecomment-772702958
+    '''
     app.config.update({
-       'url_base_pathname': '/dev',
-       'routes_pathname_prefix': '',
        'requests_pathname_prefix': '/dev/'
    })
+   '''
 
     config = configparser.ConfigParser()
     config.read('config/dash_app.cfg')
