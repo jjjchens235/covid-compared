@@ -6,5 +6,15 @@
         "project_name": "dash-app",
         "runtime": "python3.8",
         "s3_bucket": "zappa-dash-covid"
+    },
+    "prd": {
+        "app_function": "app_dash.server",
+        "aws_region": "us-east-1",
+        "profile_name": "zappa",
+        "project_name": "dash-app",
+        "runtime": "python3.8",
+        "s3_bucket": "zappa-dash-covid-us-east1"
+				"certificate_arn": "arn:aws:acm:us-east-1:385390192783:certificate/6ef5cc17-fb18-402a-b5d1-4b8e9c038beb",
+				"domain": "dashboard.covid19compared.com"
     }
 }
