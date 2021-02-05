@@ -328,13 +328,27 @@ prev_n_clicks = 0
 
 
 @app.callback(
+    Output('territory_drop', 'value'),
+    [
+        Input('territory_level_radio', 'value'),
+        Input('top_n_button', 'n_clicks')
+    ]
+)
+def set_territory_value(territory_level, n_clicks):
+    #print(f'\ndash.callback_context.triggered: {dash.callback_context.triggered}')
+    triggered = dash.callback_context.triggered[0]['prop_id']
+    if triggered == 'territory_level_radio.value' or triggered == 'top_n_button.n_clicks':
+        return None
+    raise dash.exceptions.PreventUpdate
+
+
+@app.callback(
     [
         Output('territory_drop', 'options'),
         Output('territory_drop', 'placeholder'),
-        Output('territory_drop', 'value')
     ],
     [
-        Input('territory_level_radio', 'value'),
+        Input('territory_level_radio', 'value')
     ]
 )
 def set_territory_options(territory_level):
@@ -353,13 +367,14 @@ def set_territory_options(territory_level):
     """
     global prev_territory_level
     refresh_territory_level = dash.callback_context.triggered[0]['value']
+    #print(f'\n set_territory_options(), dash.callback_context: {dash.callback_context.triggered}')
     #update dropdown values on refresh or on updated user selection of territory level
     if refresh_territory_level is None or prev_territory_level != territory_level:
         #print(f'adjusting dropdown for territory level: {territory_level}')
         prev_territory_level = territory_level
         # return a new list of territory options, and a new placeholder msg
         # Also, reset territory_value to None. This one is tricky because in the dropdown UI, the value is cleared, but the actual Input still exists meaning the graph callback is needlessly called
-        return territory_options[territory_level], f'Select {territory_level}(s)...', None
+        return territory_options[territory_level], f'Select {territory_level}(s)...'
 
 
 #creates graph based on all user inputs
@@ -403,6 +418,7 @@ def update_graph(territory_level, territories, metric, per_capita_calc, time_per
         territories = None
         prev_n_clicks = n_clicks
 
+    #print(f'\n update_graph(), dash.callback_context: {dash.callback_context.triggered}')
     # if the user has clicked 'Show top 5' or has selected a territory from the dropdown, then render graph
     if is_clicked or territories:
         #print(f'to graph: {territories}')
