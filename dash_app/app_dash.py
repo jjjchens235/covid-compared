@@ -320,11 +320,8 @@ app.layout = html.Div(children=[
 # ------------- Define App Interactivity ----------
 
 # global variables to keep track of changes
-global prev_territory_level
-prev_territory_level = ''
-
-global prev_n_clicks
-prev_n_clicks = 0
+global prev_option
+prev_option = None
 
 
 @app.callback(
@@ -334,10 +331,22 @@ prev_n_clicks = 0
         Input('top_n_button', 'n_clicks')
     ]
 )
-def set_territory_value(territory_level, n_clicks):
-    #print(f'\ndash.callback_context.triggered: {dash.callback_context.triggered}')
-    triggered = dash.callback_context.triggered[0]['prop_id']
-    if triggered == 'territory_level_radio.value' or triggered == 'top_n_button.n_clicks':
+def clear_territory_value(territory_level, n_clicks):
+    """ Clear territory value if user changes territory levels or if they click 'show top 5'
+
+    Kwargs:
+    territory_level -- The user selected territory level, i.e county, state, or country
+
+    n_clicks -- The number of times the top 5 button is clicked. This variable is not used directly, but is necessary because it triggers this clear territory callback.
+
+    Return values:
+
+    territory dropdown options -- the list of all territories to choose from based on selected territory level.
+
+    territory_placeholder -- the placeholder msg to display if user has not selected a territory yet.
+    """
+    triggered = dash.callback_context.triggered[0]
+    if triggered['prop_id'] == 'territory_level_radio.value' or triggered['prop_id'] == 'top_n_button.n_clicks':
         return None
     raise dash.exceptions.PreventUpdate
 
@@ -361,19 +370,12 @@ def set_territory_options(territory_level):
     territory dropdown options -- the list of all territories to choose from based on selected territory level.
 
     territory_placeholder -- the placeholder msg to display if user has not selected a territory yet.
-
-    territory_value -- Set or possibly reset the user selected territory
-
     """
-    global prev_territory_level
-    refresh_territory_level = dash.callback_context.triggered[0]['value']
-    #print(f'\n set_territory_options(), dash.callback_context: {dash.callback_context.triggered}')
+    triggered = dash.callback_context.triggered[0]
+    is_refreshed = triggered['value'] is None
+
     #update dropdown values on refresh or on updated user selection of territory level
-    if refresh_territory_level is None or prev_territory_level != territory_level:
-        #print(f'adjusting dropdown for territory level: {territory_level}')
-        prev_territory_level = territory_level
-        # return a new list of territory options, and a new placeholder msg
-        # Also, reset territory_value to None. This one is tricky because in the dropdown UI, the value is cleared, but the actual Input still exists meaning the graph callback is needlessly called
+    if is_refreshed or triggered['prop_id'] == 'territory_level_radio.value':
         return territory_options[territory_level], f'Select {territory_level}(s)...'
 
 
@@ -408,20 +410,21 @@ def update_graph(territory_level, territories, metric, per_capita_calc, time_per
     Graph -- The rendered graph based on all user inputs
     """
 
-    global prev_n_clicks
-    #reset prev_n_clicks on refresh
-    if n_clicks is None:
-        prev_n_clicks = 0
-    is_clicked = False
-    if n_clicks and n_clicks != prev_n_clicks:
-        is_clicked = True
-        territories = None
-        prev_n_clicks = n_clicks
+    triggered = dash.callback_context.triggered[0]
+    is_top_5 = triggered['prop_id'] == 'top_n_button.n_clicks'
+    is_refreshed = triggered['value'] is None
 
-    #print(f'\n update_graph(), dash.callback_context: {dash.callback_context.triggered}')
+    # track which was clicked last, drodpown or button?
+    global prev_option
+    if is_refreshed:
+        prev_option = None
+    elif is_top_5:
+        prev_option = 'top 5'
+    elif territories:
+        prev_option = 'dropdown'
+
     # if the user has clicked 'Show top 5' or has selected a territory from the dropdown, then render graph
-    if is_clicked or territories:
-        #print(f'to graph: {territories}')
+    if (is_top_5 or prev_option == 'top 5') or territories:
         traces = get_traces(territory_level, territories, metric, per_capita_calc, time_period)
 
         return {
@@ -439,11 +442,13 @@ if __name__ == '__main__':
 
 # run server
 else:
-    # Prefix is necessary for Dash to render correclty on Lambda API Gateway, but not necessary for custom domain using Route 53
+    # requests_pathname_prefix is necessary for Dash to render correctly on Lambda API Gateway, but not necessary for custom domain using Route 53
     # more details here: https://github.com/Miserlou/Zappa/issues/2200#issuecomment-772702958
+    '''
     app.config.update({
        'requests_pathname_prefix': '/dev/'
     })
+    '''
 
     config = configparser.ConfigParser()
     config.read('config/dash_app.cfg')
