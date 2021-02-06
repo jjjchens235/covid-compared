@@ -3,7 +3,6 @@ from dash.dependencies import Input, Output
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
-import configparser
 
 from rds_db import query_rds
 
@@ -450,7 +449,4 @@ else:
     })
     '''
 
-    config = configparser.ConfigParser()
-    config.read('config/dash_app.cfg')
-    app.server.secret_key = config.get('ZAPPA', 'SECRET')
     server = app.server

@@ -5,6 +5,7 @@ import psycopg2
 import configparser
 import pandas as pd
 import tempfile
+import os
 
 config = configparser.ConfigParser()
 config.read('config/dash_app.cfg')
@@ -12,7 +13,7 @@ config.read('config/dash_app.cfg')
 
 def query_rds(query, is_tmp_file=True):
     #print(query)
-    with psycopg2.connect("host={} dbname={} user={} password={} port={}".format(*config['RDS'].values())) as conn:
+    with psycopg2.connect(f"host={os.environ['RDS_HOST']} dbname={os.environ['RDS_DB']} user={os.environ['RDS_USER']} password={os.environ['RDS_PW']} port={os.environ['RDS_PORT']}") as conn:
         if is_tmp_file:
             return query_tmp_file(query, conn)
         else:
