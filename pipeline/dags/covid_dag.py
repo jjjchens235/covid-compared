@@ -18,7 +18,7 @@ rds = BaseHook.get_connection('rds')
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
-    'start_date': datetime(2021, 1, 25),
+    'start_date': datetime(2021, 2, 7),
     'catchup': False,
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
@@ -26,7 +26,7 @@ default_args = {
     'retries': 0,
     'retry_delay': timedelta(minutes=1),
 }
-dag = DAG('covid3', default_args=default_args, schedule_interval='0 13 * * *')
+dag = DAG('covid1', default_args=default_args, schedule_interval='0 13 * * *')
 
 
 class SQLTemplatedPythonOperator(PythonOperator):
