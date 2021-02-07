@@ -93,7 +93,7 @@ class CovidData:
         self.location.df = df
         self.merge_missing_locations()
 
-    def __get_date_cols(self, df):
+    def get_date_cols(self, df):
         """ Find the columns that match date regex """
         pattern = re.compile(r'\d{1,2}/\d{1,2}/\d{2}')
         date_cols = list(filter(pattern.match, df.columns))
@@ -110,7 +110,7 @@ class CovidData:
 
     def __melt_cols(self, df, id_vars, metric):
         """ Melt date columns to rows  """
-        date_cols = self.__get_date_cols(df)
+        date_cols = self.get_date_cols(df)
         cols_to_keep = id_vars + date_cols
         df = df[cols_to_keep]
         df = self.__convert_headers_to_datetime(df, date_cols)
@@ -126,7 +126,11 @@ class CovidData:
         """
         Converts metric cumsum value to daily values
         """
-        df[metric] = df.groupby(gb, dropna=False)[metric].diff().fillna(0)
+        df['diff'] = df.groupby(gb, dropna=False)[metric].diff()
+        #fill the first diff value with the original value
+        #https://stackoverflow.com/questions/25289132/pandas-diff-on-first-records-in-timeseries-missing-data-returns-nan
+        df[metric] = df['diff'].fillna(df[metric])
+        df.drop('diff', axis=1, inplace=True)
         return df
 
     def get_daily_totals_dfs(self):
