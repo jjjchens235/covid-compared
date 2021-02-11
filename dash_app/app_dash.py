@@ -318,9 +318,11 @@ app.layout = html.Div(children=[
 
 # ------------- Define App Interactivity ----------
 
+'''
 # global variables to keep track of changes
 global prev_option
 prev_option = None
+'''
 
 
 @app.callback(
@@ -411,9 +413,10 @@ def update_graph(territory_level, territories, metric, per_capita_calc, time_per
 
     triggered = dash.callback_context.triggered[0]
     is_top_5 = triggered['prop_id'] == 'top_n_button.n_clicks'
-    is_refreshed = triggered['value'] is None
 
     # track which was clicked last, drodpown or button?
+    '''
+    is_refreshed = triggered['value'] is None
     global prev_option
     if is_refreshed:
         prev_option = None
@@ -421,9 +424,10 @@ def update_graph(territory_level, territories, metric, per_capita_calc, time_per
         prev_option = 'top 5'
     elif territories:
         prev_option = 'dropdown'
+    '''
 
     # if the user has clicked 'Show top 5' or has selected a territory from the dropdown, then render graph
-    if (is_top_5 or prev_option == 'top 5') or territories:
+    if is_top_5 or territories:
         traces = get_traces(territory_level, territories, metric, per_capita_calc, time_period)
 
         return {
