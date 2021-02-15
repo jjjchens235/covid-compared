@@ -193,14 +193,17 @@ ALTER TABLE IF EXISTS bi.bi_country_top_new RENAME TO bi_country_top;
 -- Drop old ones
 
 DROP TABLE IF EXISTS bi.bi_county_top_old;
-
-
 DROP TABLE IF EXISTS bi.bi_state_top_old;
-
-
 DROP TABLE IF EXISTS bi.bi_country_top_old;
 
+-- Create indexes
+CREATE INDEX combined_key_county ON bi.bi_county (combined_key);
+CREATE INDEX combined_key_state ON bi.bi_state (combined_key);
+CREATE INDEX combined_key_country ON bi.bi_country (combined_key);
 
+CREATE INDEX combined_key_county_top ON bi.bi_county_top (combined_key);
+CREATE INDEX combined_key_state_top ON bi.bi_state_top (combined_key);
+CREATE INDEX combined_key_country_top ON bi.bi_country_top (combined_key);
 
 COMMIT;
 

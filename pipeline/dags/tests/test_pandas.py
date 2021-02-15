@@ -28,7 +28,6 @@ class TestPandas(unittest.TestCase):
         """
         Check that the raw github data totals for each metric match the daily totals that are derived using melt() and diff()
         """
-        THRESH = 5
         self.get_raw_totals()
         self.data.melt_dfs()
         self.data.get_daily_totals_dfs()
