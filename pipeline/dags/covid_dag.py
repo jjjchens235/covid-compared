@@ -2,10 +2,14 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.hooks.base_hook import BaseHook
+from airflow import settings
+from airflow.models import Connection
+
 from datetime import datetime, timedelta
 import json
 import psycopg2
 import re
+from sqlalchemy.orm import exc
 
 from scripts.covid_pandas import main
 
@@ -13,12 +17,11 @@ from scripts.covid_pandas import main
 json_path = './dags/config/aws_config.json'
 with open(json_path) as file:
     env = json.load(file)
-rds = BaseHook.get_connection('rds')
 
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
-    'start_date': datetime(2021, 2, 7),
+    'start_date': datetime(2021, 4, 5),
     'catchup': False,
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
@@ -29,6 +32,29 @@ default_args = {
 dag = DAG('covid1', default_args=default_args, schedule_interval='0 13 * * *')
 
 
+def create_conn(conn_id, conn_type, host, schema, login, password, port):
+    """ Create connection in airflow"""
+    session = settings.Session()
+    #create a connection object
+    conn = Connection(
+        conn_id=conn_id,
+        conn_type=conn_type,
+        host=host,
+        schema=schema,
+        login=login,
+        password=password,
+        port=port
+    )
+    session = settings.Session() # get the session
+    conn_name = session.query(Connection).filter(Connection.conn_id == conn.conn_id).first()
+
+    if str(conn_name) == str(conn_id):
+        print(f"Connection {conn_id} already exists")
+        return
+    session.add(conn)
+    session.commit()
+
+
 class SQLTemplatedPythonOperator(PythonOperator):
     # Allows sql files to be found
     template_ext = ('.sql',)
@@ -36,6 +62,7 @@ class SQLTemplatedPythonOperator(PythonOperator):
 
 def drop_tables(sql_path):
     """Run each of the DROP queries in the argument file"""
+    rds = BaseHook.get_connection('rds')
     sql_path = sql_path + '.sql'
     with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
         cur = conn.cursor()
@@ -61,6 +88,7 @@ def validate_fact_metric(upstream_tables, fact_table, metric):
 
     metric -- The metric to compare.
     """
+    rds = BaseHook.get_connection('rds')
     with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
         cur = conn.cursor()
         upstream_sum = 0
@@ -94,6 +122,7 @@ def validate_bi_counts():
     bi_country_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_country'
 
     def get_diff(bi_table, fact_q, bi_q):
+        rds = BaseHook.get_connection('rds')
         with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
             cur = conn.cursor()
             cur.execute(fact_q)
@@ -111,6 +140,13 @@ def validate_bi_counts():
     get_diff('bi.bi_country', fact_country_q, bi_country_q)
 
 
+create_rds_conn = PythonOperator(
+    dag=dag,
+    task_id='create_rds_conn',
+    python_callable=create_conn,
+    op_kwargs={'conn_id': 'rds', 'conn_type': env['RDS']['TYPE'], 'host': env['RDS']['HOST'], 'schema': env['RDS']['SCHEMA'], 'login': env['RDS']['LOGIN'], 'password': env['RDS']['PASSWORD'], 'port': env['RDS']['PORT']}
+)
+
 #pandas script that moves data in github to S3 csv file
 load_to_s3 = PythonOperator(
     task_id='data_to_s3',
@@ -118,6 +154,7 @@ load_to_s3 = PythonOperator(
     python_callable=main,
     op_args=[env['AWS']['LOGIN'], env['AWS']['PW'], 's3://' + env['S3']['BUCKET'] + '/']
 )
+
 
 # fyi .sql extension cannot be passed in as args bc of sqlpython operator templating
 drop_existing = SQLTemplatedPythonOperator(
@@ -222,4 +259,4 @@ drop_staging = SQLTemplatedPythonOperator(
 )
 
 
-load_to_s3 >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
+load_to_s3 >> create_rds_conn >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging

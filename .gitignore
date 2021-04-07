@@ -2,6 +2,7 @@ dash_app.cfg
 dash_credentials.json
 aws_config.json
 deprecated/
+flask_app/
 
 
 
