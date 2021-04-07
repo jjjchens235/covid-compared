@@ -50,130 +50,155 @@ CREATE TABLE if NOT EXISTS bi.bi_country_new (
 
 -- insert into bi tables to be used for dash app
 -- county
-INSERT INTO bi.bi_county_new (
-	location_id, combined_key, country, 
-	state, county, population, dt, confirmed, 
-	deaths, recovered, confirmed_per_capita, 
-	deaths_per_capita, recovered_per_capita
-) 
-SELECT 
-	l.location_id, 
-	combined_key, 
-	country, 
-	state, 
-	county, 
-	population, 
-	dt, 
-	confirmed, 
-	deaths, 
-	recovered, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(confirmed AS numeric)
-		), 
-		2
-	) confirmed_per_capita, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(deaths AS numeric)
-		), 
-		2
-	) deaths_per_capita, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(recovered AS numeric)
-		), 
-		2
-	) recovered_per_capita 
-FROM 
-	fact.fact_metrics_moving_avg f 
-	JOIN dim.location l ON f.location_id = l.location_id 
-WHERE 
-	county IS NOT NULL;
-	
+INSERT INTO
+  bi.bi_county_new (
+    location_id,
+    combined_key,
+    country,
+    state,
+    county,
+    population,
+    dt,
+    confirmed,
+    deaths,
+    recovered,
+    confirmed_per_capita,
+    deaths_per_capita,
+    recovered_per_capita
+  )
+SELECT
+  l.location_id,
+  combined_key,
+  country,
+  state,
+  county,
+  population,
+  dt,
+  confirmed,
+  deaths,
+  recovered,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(confirmed AS numeric)
+    ),
+    2
+  ) confirmed_per_capita,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(deaths AS numeric)
+    ),
+    2
+  ) deaths_per_capita,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(recovered AS numeric)
+    ),
+    2
+  ) recovered_per_capita
+FROM
+  fact.fact_metrics_moving_avg f
+  JOIN dim.location l ON f.location_id = l.location_id
+WHERE
+  county IS NOT NULL;
+
 -- state
-INSERT INTO bi.bi_state_new (
-	location_id, combined_key, country, 
-	state, population, dt, confirmed, 
-	deaths, recovered, confirmed_per_capita, 
-	deaths_per_capita, recovered_per_capita
-) -- need to group by since US states are by county
-SELECT 
-	l.location_id, 
-	combined_key, 
-	country, 
-	state, 
-	population, 
-	dt, 
-	confirmed, 
-	deaths, 
-	recovered, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(confirmed AS numeric)
-		), 
-		2
-	) confirmed_per_capita, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(deaths AS numeric)
-		), 
-		2
-	) deaths_per_capita, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(recovered AS numeric)
-		), 
-		2
-	) recovered_per_capita 
-FROM 
-	fact.fact_metrics_moving_avg f 
-	JOIN dim.location l ON f.location_id = l.location_id 
-WHERE 
-	state IS NOT NULL 
-	AND county IS NULL;
-	
+INSERT INTO
+  bi.bi_state_new (
+    location_id,
+    combined_key,
+    country,
+    state,
+    population,
+    dt,
+    confirmed,
+    deaths,
+    recovered,
+    confirmed_per_capita,
+    deaths_per_capita,
+    recovered_per_capita
+  ) -- need to group by since US states are by county
+SELECT
+  l.location_id,
+  combined_key,
+  country,
+  state,
+  population,
+  dt,
+  confirmed,
+  deaths,
+  recovered,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(confirmed AS numeric)
+    ),
+    2
+  ) confirmed_per_capita,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(deaths AS numeric)
+    ),
+    2
+  ) deaths_per_capita,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(recovered AS numeric)
+    ),
+    2
+  ) recovered_per_capita
+FROM
+  fact.fact_metrics_moving_avg f
+  JOIN dim.location l ON f.location_id = l.location_id
+WHERE
+  state IS NOT NULL
+  AND county IS NULL;
+
 -- country
-INSERT INTO bi.bi_country_new (
-	location_id, combined_key, population, 
-	dt, confirmed, deaths, recovered, 
-	confirmed_per_capita, deaths_per_capita, 
-	recovered_per_capita
-) 
--- need to group by since US states are by county
-SELECT 
-	l.location_id, 
-	combined_key, 
-	population, 
-	dt, 
-	confirmed, 
-	deaths, 
-	recovered, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(confirmed AS numeric)
-		), 
-		2
-	) confirmed_per_capita, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(deaths AS numeric)
-		), 
-		2
-	) deaths_per_capita, 
-	round(
-		(
-			100000.0 / cast(population AS numeric) * cast(recovered AS numeric)
-		), 
-		2
-	) recovered_per_capita 
-FROM 
-	fact.fact_metrics_moving_avg f 
-	JOIN dim.location l ON f.location_id = l.location_id 
-WHERE 
-	county IS NULL 
-	AND state IS NULL;
-	
+INSERT INTO
+  bi.bi_country_new (
+    location_id,
+    combined_key,
+    population,
+    dt,
+    confirmed,
+    deaths,
+    recovered,
+    confirmed_per_capita,
+    deaths_per_capita,
+    recovered_per_capita
+  ) -- need to group by since US states are by county
+SELECT
+  l.location_id,
+  combined_key,
+  population,
+  dt,
+  confirmed,
+  deaths,
+  recovered,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(confirmed AS numeric)
+    ),
+    2
+  ) confirmed_per_capita,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(deaths AS numeric)
+    ),
+    2
+  ) deaths_per_capita,
+  round(
+    (
+      100000.0 / cast(population AS numeric) * cast(recovered AS numeric)
+    ),
+    2
+  ) recovered_per_capita
+FROM
+  fact.fact_metrics_moving_avg f
+  JOIN dim.location l ON f.location_id = l.location_id
+WHERE
+  county IS NULL
+  AND state IS NULL;
+
 -- Rename new tables
 ALTER TABLE 
 	IF EXISTS bi.bi_county RENAME TO bi_county_old;
