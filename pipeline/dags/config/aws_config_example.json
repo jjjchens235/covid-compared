@@ -1,17 +1,24 @@
-
 {
-	"AWS":{
-		"LOGIN":"",
-		"PW":""
-	},
+	 "AWS":{
+			"LOGIN":"<>",
+			"PW":"<>"
+	 },
 	 "S3":{
-			"BUCKET":"",
-			"REGION":"",
+			"BUCKET":"<>",
+			"REGION":"<>",
 			"US_CONFIRMED":"us_confirmed_diff.csv",
 			"GLOBAL_CONFIRMED":"global_confirmed_diff.csv",
 			"US_DEATHS":"us_deaths_diff.csv",
 			"GLOBAL_DEATHS":"global_deaths_diff.csv",
 			"GLOBAL_RECOVERED":"global_recovered_diff.csv",
 			"LOCATION":"location_diff.csv"
+	 },
+	 "RDS":{
+			"TYPE":"Postgres",
+			"HOST":"*****.us-west-*.rds.amazonaws.com",
+			"SCHEMA":"postgres",
+			"LOGIN":"postgres",
+			"PASSWORD":"<>",
+			"PORT":"5432"
 	 }
 }

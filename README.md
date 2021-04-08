@@ -102,22 +102,15 @@ Notable dashboard features:
 ### Running data pipeline
 - If first time running, add credentials to `pipeline/dags/config/aws_config.json`. An example file is provided for reference.
 
-- Build project
-
+- To build project run 
 ``` sh
 docker-compose up -d
 ```
 
-
 * After the  airflow servers are up
 	- go to http://localhost:8080/
-		- username: admin
-		- pw: password 
-	- create a new connection named 'rds' like so:
-
-![airflow admin](./images/airflow_admin_connections.png)
-![airflow rds](./images/airflow_rds.png)
-
+		- username: `admin`
+		- pw: `password` 
 - To turn off airflow servers and delete Docker containers
 
 ``` sh
