@@ -1,17 +1,14 @@
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.postgres_operator import PostgresOperator
-from airflow.hooks.base_hook import BaseHook
 from airflow import settings
 from airflow.models import Connection
 
 from datetime import datetime, timedelta
 import json
-import psycopg2
-import re
-from sqlalchemy.orm import exc
 
 from scripts.covid_pandas import main
+from helpers import validation_helper
 
 
 json_path = './dags/config/aws_config.json'
@@ -55,91 +52,6 @@ def create_conn(conn_id, conn_type, host, schema, login, password, port):
     session.commit()
 
 
-class SQLTemplatedPythonOperator(PythonOperator):
-    # Allows sql files to be found
-    template_ext = ('.sql',)
-
-
-def drop_tables(sql_path):
-    """Run each of the DROP queries in the argument file"""
-    rds = BaseHook.get_connection('rds')
-    sql_path = sql_path + '.sql'
-    with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
-        cur = conn.cursor()
-        with open(sql_path, 'r') as fd:
-            sqlfile = fd.read()
-            sql_commands = sqlfile.split(';')
-            for query in sql_commands:
-                query_sub = re.sub('\n', '', query)
-                if query_sub:
-                    query_sub = query_sub + ';'
-                    #print(query_sub)
-                    cur.execute(query)
-                    conn.commit()
-
-
-def validate_fact_metric(upstream_tables, fact_table, metric):
-    """
-    Validates the chosen metric (confirmed, deaths, or recovered) by comparing the fact table metric against the upstream staging tables, to ensure the sum of the metric has not changed downstream
-
-    upstream_tables -- The US and global staging table for the chosen metric.
-
-    fact_table -- The final derived fact table.
-
-    metric -- The metric to compare.
-    """
-    rds = BaseHook.get_connection('rds')
-    with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
-        cur = conn.cursor()
-        upstream_sum = 0
-        # get the sum of the upstream staging tables
-        for upstream_table in upstream_tables:
-            query = f"SELECT SUM({metric}) FROM {upstream_table}"
-            cur.execute(query)
-            upstream_sum += cur.fetchone()[0]
-
-        # get the sum of the fact table
-        query = f"SELECT SUM({metric}) FROM {fact_table}"
-        cur.execute(query)
-        fact_sum = cur.fetchone()[0]
-
-    diff = abs(upstream_sum - fact_sum)
-    print(f"For {metric} metric...\nupstream sum: {upstream_sum}\nfact_sum: {fact_sum}\nDiff: {diff}")
-    if diff > 5:
-        raise ValueError("Diff exceeeded threshhold")
-
-
-def validate_bi_counts():
-    """
-    Check that each bi table (county, state, country) has a distinct count that matches the upstream fact table
-    """
-
-    fact_county_q = 'SELECT COUNT(DISTINCT(combined_key)) FROM fact.fact_metrics f JOIN dim.location l on f.location_id = l.location_id WHERE county IS NOT NULL'
-    fact_state_q = 'SELECT COUNT(DISTINCT(combined_key)) FROM fact.fact_metrics f JOIN dim.location l on f.location_id = l.location_id WHERE state IS NOT NULL and county is null'
-    fact_country_q = 'SELECT COUNT(DISTINCT(combined_key)) FROM fact.fact_metrics f JOIN dim.location l on f.location_id = l.location_id WHERE state is null and county is null'
-    bi_county_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_county'
-    bi_state_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_state'
-    bi_country_q = 'SELECT COUNT(DISTINCT combined_key) FROM bi.bi_country'
-
-    def get_diff(bi_table, fact_q, bi_q):
-        rds = BaseHook.get_connection('rds')
-        with psycopg2.connect(f"host={rds.host} dbname={rds.schema} user={rds.login} password={rds.password} port={rds.port}") as conn:
-            cur = conn.cursor()
-            cur.execute(fact_q)
-            fact_count = cur.fetchone()[0]
-
-            cur.execute(bi_q)
-            bi_count = cur.fetchone()[0]
-            diff = fact_count - bi_count
-            print(f"For {bi_table} table...\nfact count: {fact_count}\nbi_count: {bi_count}\nDiff: {diff}\n")
-            if diff != 0:
-                raise ValueError("Diff exceeeded threshhold")
-
-    get_diff('bi.bi_county', fact_county_q, bi_county_q)
-    get_diff('bi.bi_state', fact_state_q, bi_state_q)
-    get_diff('bi.bi_country', fact_country_q, bi_country_q)
-
-
 create_rds_conn = PythonOperator(
     dag=dag,
     task_id='create_rds_conn',
@@ -156,12 +68,11 @@ load_to_s3 = PythonOperator(
 )
 
 
-# fyi .sql extension cannot be passed in as args bc of sqlpython operator templating
-drop_existing = SQLTemplatedPythonOperator(
+drop_existing = PostgresOperator(
     task_id='drop_existing',
     dag=dag,
-    python_callable=drop_tables,
-    op_args=['./dags/sql/01_drop_existing']
+    postgres_conn_id='rds',
+    sql='/sql/01_drop_existing.sql'
 )
 
 create_tables = PostgresOperator(
@@ -213,21 +124,21 @@ load_fact_tables = PostgresOperator(
 validate_fact_confirmed = PythonOperator(
     task_id='validate_fact_confirmed',
     dag=dag,
-    python_callable=validate_fact_metric,
+    python_callable=validation_helper.validate_fact_metric,
     op_args=[['staging.staging_global_confirmed', 'staging.staging_us_confirmed'], 'fact.fact_metrics', 'confirmed']
 )
 
 validate_fact_deaths = PythonOperator(
     task_id='validate_fact_deaths',
     dag=dag,
-    python_callable=validate_fact_metric,
+    python_callable=validation_helper.validate_fact_metric,
     op_args=[['staging.staging_global_deaths', 'staging.staging_us_deaths'], 'fact.fact_metrics', 'deaths']
 )
 
 validate_fact_recovered = PythonOperator(
     task_id='validate_fact_recovered',
     dag=dag,
-    python_callable=validate_fact_metric,
+    python_callable=validation_helper.validate_fact_metric,
     op_args=[['staging.staging_global_recovered'], 'fact.fact_metrics', 'recovered']
 )
 
@@ -244,18 +155,17 @@ load_bi_tables = PostgresOperator(
     }
 )
 
-
 validate_bi_counts = PythonOperator(
     task_id='validate_bi_counts',
     dag=dag,
-    python_callable=validate_bi_counts
+    python_callable=validation_helper.validate_bi_counts
 )
 
-drop_staging = SQLTemplatedPythonOperator(
+drop_staging = PostgresOperator(
     task_id='drop_staging',
     dag=dag,
-    python_callable=drop_tables,
-    op_args=['./dags/sql/08_drop_staging_tables']
+    postgres_conn_id='rds',
+    sql='/sql/08_drop_staging_tables.sql'
 )
 
 
