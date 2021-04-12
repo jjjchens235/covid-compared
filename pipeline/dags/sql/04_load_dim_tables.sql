@@ -13,10 +13,10 @@ SELECT
   country,
   state,
   county,
-  cast(population AS INT) population,
+  CAST(population AS INT) population,
   combined_key
 FROM
-  staging.staging_location;
+  staging.staging_location ON CONFLICT (location_id) DO NOTHING;
 
 --insert into iso2 table
 INSERT INTO
@@ -27,7 +27,7 @@ SELECT
 FROM
   staging.staging_location
 WHERE
-  iso2 IS NOT NULL;
+  iso2 IS NOT NULL ON CONFLICT (iso2_id) DO NOTHING;
 
 --insert into lat_lon table
 INSERT INTO
@@ -37,33 +37,33 @@ SELECT
   lon,
   location_id
 FROM
-  staging.staging_location;
+  staging.staging_location ON CONFLICT (lat_lon_id) DO NOTHING;
 
 -- Insert dim time table
 INSERT INTO
   dim.time (dt, YEAR, MONTH, DAY, weekday)
 SELECT
   DISTINCT dt,
-  extract(
+  EXTRACT(
     YEAR
     FROM
       dt
   ) AS YEAR,
-  extract(
+  EXTRACT(
     MONTH
     FROM
       dt
   ) AS MONTH,
-  extract(
+  EXTRACT(
     DAY
     FROM
       dt
   ) AS DAY,
-  extract(
+  EXTRACT(
     dow
     FROM
       dt
   ) AS weekday
 FROM
-  staging.staging_global_confirmed;
+  staging.staging_global_confirmed ON CONFLICT (dt) DO NOTHING;
 

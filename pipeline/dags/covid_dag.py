@@ -18,7 +18,7 @@ with open(json_path) as file:
 default_args = {
     'owner': 'jwong',
     'depends_on_past': False,
-    'start_date': datetime(2021, 4, 5),
+    'start_date': datetime(2021, 4, 11),
     'catchup': False,
     'email': ['justin.wong235@gmail.com'],
     'email_on_failure': False,
@@ -68,11 +68,20 @@ load_to_s3 = PythonOperator(
 )
 
 
+'''
 drop_existing = PostgresOperator(
     task_id='drop_existing',
     dag=dag,
     postgres_conn_id='rds',
     sql='/sql/01_drop_existing.sql'
+)
+'''
+
+drop_staging = PostgresOperator(
+    task_id='drop_staging',
+    dag=dag,
+    postgres_conn_id='rds',
+    sql='/sql/08_drop_staging_tables.sql'
 )
 
 create_tables = PostgresOperator(
@@ -161,12 +170,5 @@ validate_bi_counts = PythonOperator(
     python_callable=validation_helper.validate_bi_counts
 )
 
-drop_staging = PostgresOperator(
-    task_id='drop_staging',
-    dag=dag,
-    postgres_conn_id='rds',
-    sql='/sql/08_drop_staging_tables.sql'
-)
 
-
-load_to_s3 >> create_rds_conn >> drop_existing >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts >> drop_staging
+load_to_s3 >> create_rds_conn >> drop_staging >> create_tables >> stage_tables >> load_dim_tables >> load_temp_fact_tables >> load_fact_tables >> [validate_fact_confirmed, validate_fact_deaths, validate_fact_recovered] >> load_bi_tables >> validate_bi_counts
