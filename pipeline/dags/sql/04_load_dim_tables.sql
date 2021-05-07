@@ -16,28 +16,35 @@ SELECT
   CAST(population AS INT) population,
   combined_key
 FROM
-  staging.staging_location ON CONFLICT (location_id) DO NOTHING;
+  -- check combined key because we create our own location_id's for missing locations and this can lead to dup locations, i.e. Yakutat, Alaska, United States
+  staging.staging_location ON CONFLICT (combined_key) DO NOTHING;
 
 --insert into iso2 table
 INSERT INTO
-  dim.iso2 (iso2, location_id)
+  dim.iso (iso2, iso3, location_id)
 SELECT
   iso2,
+	iso3,
   location_id
 FROM
   staging.staging_location
 WHERE
-  iso2 IS NOT NULL ON CONFLICT (iso2_id) DO NOTHING;
+  iso2 IS NOT NULL ON CONFLICT (location_id) DO NOTHING;
 
 --insert into lat_lon table
 INSERT INTO
-  dim.lat_lon (lat, lon, location_id)
+  dim.lat_lon (lat, lon, lat_lon, location_id)
 SELECT
   lat,
   lon,
+	concat_ws(', ', lat, lon) lat_lon,
   location_id
 FROM
-  staging.staging_location ON CONFLICT (lat_lon_id) DO NOTHING;
+  staging.staging_location
+WHERE
+  lat IS NOT NULL 
+	AND lon IS NOT NULL 
+	ON CONFLICT (location_id) DO NOTHING;
 
 -- Insert dim time table
 INSERT INTO
@@ -66,4 +73,3 @@ SELECT
   ) AS weekday
 FROM
   staging.staging_global_confirmed ON CONFLICT (dt) DO NOTHING;
-

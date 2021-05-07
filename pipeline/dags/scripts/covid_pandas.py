@@ -66,7 +66,7 @@ class CovidData:
         """
         #filter for the columns needed for combined key
         df_gl = self.global_confirmed.df[['state', 'country', 'Lat', 'lon']]
-        df_us = self.us_confirmed.df[['state', 'country', 'Lat', 'lon', 'iso2', 'county']]
+        df_us = self.us_confirmed.df[['state', 'country', 'Lat', 'lon', 'iso2', 'iso3', 'county']]
 
         #create a combined key field in both us and global confirmed
         df_gl['combined_key'] = (df_gl['state'] + ', ').fillna('') + df_gl['country']
@@ -79,14 +79,14 @@ class CovidData:
         #create a 6 digit unique id, that's the smallest UID not used in the original location table
         df_missing['location_id'] = df_missing.groupby('combined_key')['combined_key'].transform(lambda x: randint(100000, 999999))
         df_missing['Population'] = np.nan
-        df_missing = df_missing[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon', 'combined_key']]
+        df_missing = df_missing[['location_id', 'country', 'state', 'iso2', 'iso3', 'county', 'Population', 'Lat', 'lon', 'combined_key']]
         self.location.df = pd.concat([self.location.df, df_missing], axis=0)
 
     def clean_location(self):
         """ Clean/update the location dataframe """
         df = self.location.df
         df = df.rename(columns=self.cols_to_rename)
-        df = df[['location_id', 'country', 'state', 'iso2', 'county', 'Population', 'Lat', 'lon']]
+        df = df[['location_id', 'country', 'state', 'iso2',  'iso3','county', 'Population', 'Lat', 'lon']]
         df.loc[df['country'] == 'US', 'country'] = 'United States'
         #have to manually recreate combined_key field since original field isnt consistently formatted
         df['combined_key'] = (df['county'] + ', ').fillna('') + (df['state'] + ', ').fillna('') + df['country']

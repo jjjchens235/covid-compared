@@ -45,7 +45,7 @@ SELECT aws_s3.table_import_from_s3(
 
 SELECT aws_s3.table_import_from_s3(
 	 'staging.staging_location',
-	 'location_id, country, state, iso2, county, population, lat, lon, combined_key',
+	 'location_id, country, state, iso2, iso3, county, population, lat, lon, combined_key',
 	 '(FORMAT csv, DELIMITER E''\t'', HEADER true)',
 	 aws_commons.create_s3_uri( '{{ params.s3_bucket }}', '{{ params.location }}', '{{ params.region }}' )
 );
